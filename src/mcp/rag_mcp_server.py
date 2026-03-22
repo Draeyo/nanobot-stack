@@ -87,9 +87,18 @@ async def classify_query(query: str) -> str:
 # ====================== CONVERSATION HOOK ======================
 
 @mcp.tool()
-async def conversation_hook(conversation: list[dict[str, str]], extract_facts: bool = True, update_profile: bool = True, summarize: bool = True) -> str:
+async def conversation_hook(conversation: list[dict[str, str]], extract_facts: bool = True, do_update_profile: bool = True, summarize: bool = True) -> str:
     """Post-conversation pipeline: extracts durable facts, updates user profile, stores conversation summary."""
-    return json.dumps(await _post("/conversation-hook", {"conversation": conversation, "extract_facts": extract_facts, "update_profile": update_profile, "summarize": summarize, "store_summary": True}), ensure_ascii=False)
+    return json.dumps(
+        await _post("/conversation-hook", {
+            "conversation": conversation,
+            "extract_facts": extract_facts,
+            "update_profile": do_update_profile,
+            "summarize": summarize,
+            "store_summary": True,
+        }),
+        ensure_ascii=False,
+    )
 
 # ====================== CONTEXT PREFETCH ======================
 
@@ -113,9 +122,9 @@ async def plan_task(query: str, context: str = "") -> str:
     return json.dumps(await _post("/plan", {"query": query, "context": context}), ensure_ascii=False)
 
 @mcp.tool()
-async def execute_step(tool: str, input: dict[str, Any] | None = None) -> str:
+async def execute_step(tool: str, step_input: dict[str, Any] | None = None) -> str:
     """Execute a single step from a plan (search_memory, shell_command, web_fetch, llm_call, notify, done)."""
-    return json.dumps(await _post("/execute-step", {"tool": tool, "input": input or {}}), ensure_ascii=False)
+    return json.dumps(await _post("/execute-step", {"tool": tool, "input": step_input or {}}), ensure_ascii=False)
 
 # ====================== TOOLS ======================
 

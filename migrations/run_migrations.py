@@ -12,10 +12,8 @@ collection then crashes, on re-run check() sees the collection exists and skips.
 """
 
 import importlib.util
-import json
 import os
 import pathlib
-import sys
 from typing import Any
 
 MIGRATIONS_DIR = pathlib.Path(__file__).resolve().parent
@@ -66,7 +64,7 @@ def run(dry_run: bool = False, target_version: int | None = None) -> list[dict[s
     ctx = build_context(dry_run=dry_run)
     vf = pathlib.Path(ctx["version_file"])
     current = get_current_version(vf)
-    results = []
+    migration_results = []
 
     for ver, path in discover_migrations():
         if ver <= current:
@@ -85,28 +83,28 @@ def run(dry_run: bool = False, target_version: int | None = None) -> list[dict[s
             # Idempotency check: if check() exists and returns True, skip
             if hasattr(mod, "check") and not dry_run:
                 if mod.check(ctx):
-                    print(f"  → already applied (idempotent check)")
-                    results.append({"version": ver, "name": path.stem, "status": "already_applied"})
+                    print("  → already applied (idempotent check)")
+                    migration_results.append({"version": ver, "name": path.stem, "status": "already_applied"})
                     continue
 
             if not dry_run:
                 mod.migrate(ctx)
 
-            results.append({"version": ver, "name": path.stem, "status": "ok"})
+            migration_results.append({"version": ver, "name": path.stem, "status": "ok"})
             print(f"  → {'would apply' if dry_run else 'applied'}")
         except Exception as e:
-            results.append({"version": ver, "name": path.stem, "status": "error", "error": str(e)})
+            migration_results.append({"version": ver, "name": path.stem, "status": "error", "error": str(e)})
             print(f"  → ERROR: {e}")
             if not dry_run:
                 break
 
     # Update version to highest successful migration
     if not dry_run:
-        applied = [r for r in results if r["status"] in ("ok", "already_applied")]
+        applied = [r for r in migration_results if r["status"] in ("ok", "already_applied")]
         if applied:
-            vf.write_text(str(applied[-1]["version"]))
+            vf.write_text(str(applied[-1]["version"]), encoding="utf-8")
 
-    return results
+    return migration_results
 
 
 if __name__ == "__main__":
