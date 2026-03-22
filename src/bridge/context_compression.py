@@ -8,7 +8,6 @@
 """
 from __future__ import annotations
 
-import hashlib
 import logging
 import os
 import re
@@ -112,7 +111,7 @@ def inject_summary(summary: str, recent_messages: list[dict[str, str]]) -> list[
 
 def deduplicate_by_embedding(
     retrieval_results: list[dict[str, Any]],
-    query_embedding: list[float],
+    _query_embedding: list[float],
     recent_messages: list[dict[str, str]],
     embed_fn: Callable[[list[str]], tuple[list[list[float]], Any]] | None = None,
     similarity_threshold: float = 0.85,

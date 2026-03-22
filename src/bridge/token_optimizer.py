@@ -180,7 +180,7 @@ class TokenTracker:
         try:
             if os.path.exists(self._persist_path):
                 import json as _json
-                with open(self._persist_path) as f:
+                with open(self._persist_path, encoding="utf-8") as f:
                     lines = f.readlines()
                 if lines:
                     last = _json.loads(lines[-1])
@@ -234,7 +234,7 @@ class TokenTracker:
                     "timestamp": datetime.now(timezone.utc).isoformat(),
                     **self.stats(),
                 }
-                with open(self._persist_path, "a") as f:
+                with open(self._persist_path, "a", encoding="utf-8") as f:
                     f.write(_json.dumps(entry) + "\n")
                 self._dirty = False
             except Exception as exc:

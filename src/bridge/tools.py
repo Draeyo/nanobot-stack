@@ -5,7 +5,6 @@ These are executed server-side by the bridge and exposed via the MCP server.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import re
@@ -82,6 +81,7 @@ def run_shell_command(command: str) -> dict[str, Any]:
             text=True,
             timeout=SHELL_TIMEOUT,
             env={**os.environ, "LANG": "C.UTF-8"},
+            check=False,
         )
         return {
             "ok": True,

@@ -5,13 +5,12 @@ Adds: /classify, /conversation-hook, /context-prefetch, /summarize-conversation,
 /profile, /dashboard
 """
 from __future__ import annotations
-import json, logging, os, uuid
-from datetime import datetime, timezone
+import json, logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 logger = logging.getLogger("rag-bridge.extensions")
 router = APIRouter()

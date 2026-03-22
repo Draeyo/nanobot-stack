@@ -1,3 +1,3 @@
-mcp>=1.0
+mcp @ git+https://github.com/modelcontextprotocol/python-sdk.git@main
 httpx>=0.27
 python-dotenv>=1.0

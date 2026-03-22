@@ -170,38 +170,7 @@ def _shutdown():
     token_tracker.flush()
     logger.info("Token stats flushed to disk")
 
-# v8: Mount extension endpoints (classify, conversation-hook, plan, feedback, etc.)
-try:
-    from extensions import router as ext_router, init_extensions
-
-    def _ext_search(query: str, collections: list[str] | None = None, limit: int = 5, tags: list[str] | None = None) -> dict:
-        """Adapter for extensions to call the search logic."""
-        from pydantic import BaseModel, Field
-        class _S(BaseModel):
-            query: str; collections: list[str] = Field(default_factory=list)
-            tags: list[str] = Field(default_factory=list); limit: int = 5
-            source_name: str | None = None; source_path_prefix: str | None = None
-        body = _S(query=query, collections=collections or [], tags=tags or [], limit=limit)
-        return search(body)
-
-    def _ext_remember(text: str, collection: str = "memory_personal", subject: str = "",
-                      tags: list[str] | None = None, source: str = "extension", summarize: bool = True) -> dict:
-        """Adapter for extensions to call remember logic."""
-        body = RememberIn(text=text, collection=collection, subject=subject,
-                          tags=tags or [], source=source, summarize=summarize)
-        return remember(body)
-
-    def _ext_embed(texts: list[str]) -> tuple[list[list[float]], Any]:
-        """Adapter for extensions to call embedding (for dedup)."""
-        return embed_texts(texts)
-
-    init_extensions(run_chat_fn=run_chat_task, search_fn=_ext_search,
-                    remember_fn=_ext_remember, verify_token_dep=verify_token,
-                    embed_fn=_ext_embed)
-    app.include_router(ext_router)
-    logger.info("v8 extensions loaded (classify, conversation-hook, plan, feedback, profile, dashboard, smart-chat)")
-except Exception as exc:
-    logger.warning("v8 extensions not loaded: %s", exc)
+# v8 extension setup is deferred to after run_chat_task / verify_token are defined (see below)
 
 # ---------------------------------------------------------------------------
 # Collection mapping
@@ -382,8 +351,8 @@ def safe_router_view(router: dict[str, Any]) -> dict[str, Any]:
 
 def route_chain(task_type: str) -> list[str]:
     router = load_router()
-    routes = router.get("task_routes", {})
-    return routes.get(task_type) or routes.get("fallback_general", [])
+    task_routes = router.get("task_routes", {})
+    return task_routes.get(task_type) or task_routes.get("fallback_general", [])
 
 def resolve_profile(profile_name: str) -> dict[str, Any]:
     router = load_router()
@@ -504,6 +473,39 @@ def run_chat_task(
                 attempts.append({"profile": profile_name, "status": "error", "error": str(e)})
         _safe_flush()
         raise RuntimeError(json.dumps({"task_type": task_type, "attempts": attempts}))
+
+# v8: Mount extension endpoints (classify, conversation-hook, plan, feedback, etc.)
+# Placed here so run_chat_task and verify_token are already defined.
+try:
+    from extensions import router as ext_router, init_extensions
+
+    def _ext_search(query: str, collections: list[str] | None = None, limit: int = 5, tags: list[str] | None = None) -> dict:
+        """Adapter for extensions to call the search logic."""
+        class _S(BaseModel):
+            query: str; collections: list[str] = Field(default_factory=list)
+            tags: list[str] = Field(default_factory=list); limit: int = 5
+            source_name: str | None = None; source_path_prefix: str | None = None
+        body = _S(query=query, collections=collections or [], tags=tags or [], limit=limit)
+        return search(body)
+
+    def _ext_remember(text: str, collection: str = "memory_personal", subject: str = "",
+                      tags: list[str] | None = None, source: str = "extension", summarize: bool = True) -> dict:
+        """Adapter for extensions to call remember logic."""
+        body = RememberIn(text=text, collection=collection, subject=subject,
+                          tags=tags or [], source=source, summarize=summarize)
+        return remember(body)
+
+    def _ext_embed(texts: list[str]) -> tuple[list[list[float]], Any]:
+        """Adapter for extensions to call embedding (for dedup)."""
+        return embed_texts(texts)
+
+    init_extensions(run_chat_fn=run_chat_task, search_fn=_ext_search,
+                    remember_fn=_ext_remember, verify_token_dep=verify_token,
+                    embed_fn=_ext_embed)
+    app.include_router(ext_router)
+    logger.info("v8 extensions loaded (classify, conversation-hook, plan, feedback, profile, dashboard, smart-chat)")
+except Exception as exc:
+    logger.warning("v8 extensions not loaded: %s", exc)
 
 # ---------------------------------------------------------------------------
 # Embeddings with cache and batching
@@ -774,9 +776,9 @@ def _run_ingest_sync() -> dict[str, Any]:
                 try:
                     from context_compression import build_chunk_summary_messages
                     for pt in points:
-                        chunk_text = pt.payload.get("text", "")
-                        if len(chunk_text) > 200:  # skip tiny chunks
-                            summ_msgs = build_chunk_summary_messages(chunk_text)
+                        chunk_str = pt.payload.get("text", "")
+                        if len(chunk_str) > 200:  # skip tiny chunks
+                            summ_msgs = build_chunk_summary_messages(chunk_str)
                             summ_resp = run_chat_task("rewrite_polish", summ_msgs, max_tokens=100)
                             pt.payload["summary"] = summ_resp.get("text", "")[:300]
                     # Re-upsert with summaries added to payloads

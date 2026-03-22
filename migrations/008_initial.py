@@ -5,6 +5,5 @@ transition to the migration-aware framework.
 """
 VERSION = 8
 
-def migrate(ctx: dict) -> None:
+def migrate(_ctx: dict) -> None:
     """No-op: just bumps the version to 8."""
-    pass

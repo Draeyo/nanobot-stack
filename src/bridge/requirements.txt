@@ -10,6 +10,6 @@ pypdf>=5.0
 python-docx>=1.1
 beautifulsoup4>=4.12
 langfuse>=2.50
-sentence-transformers>=3.3
+sentence-transformers>=0.3.7.1
 python-json-logger>=3.1
 prometheus-fastapi-instrumentator>=7.0
