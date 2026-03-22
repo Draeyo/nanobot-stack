@@ -1,0 +1,31 @@
+[Unit]
+Description=nanobot RAG bridge v7 with model router
+After=network.target qdrant.service postgresql.service docker.service langfuse-compose.service
+Wants=langfuse-compose.service
+
+[Service]
+User=${APP_USER}
+Group=${APP_GROUP}
+WorkingDirectory=${RAG_HOME}
+EnvironmentFile=${RAG_HOME}/.env
+Environment=PYTHONUNBUFFERED=1
+ExecStart=${RAG_HOME}/.venv/bin/uvicorn app:app --host ${RAG_BIND} --port ${RAG_PORT}
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=${RAG_HOME} ${RAG_DOCS_DIR}
+
+[Install]
+WantedBy=multi-user.target

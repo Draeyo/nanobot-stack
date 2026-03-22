@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+BRIDGE_TOKEN=""
+if [[ -f "${RAG_HOME}/.bridge_token" ]]; then
+  BRIDGE_TOKEN="$(cat "${RAG_HOME}/.bridge_token")"
+fi
+curl -fsS -X POST "http://${RAG_BIND}:${RAG_PORT}/ingest-sync" \
+  -H "Content-Type: application/json" \
+  -H "X-Bridge-Token: $BRIDGE_TOKEN" \
+  >/dev/null

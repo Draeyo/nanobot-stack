@@ -1,0 +1,28 @@
+[Unit]
+Description=Qdrant Vector Database
+After=network.target
+
+[Service]
+User=${APP_USER}
+Group=${APP_GROUP}
+ExecStart=${LOCAL_BIN_DIR}/qdrant --config-path ${QDRANT_CONFIG_DIR}/config.yaml
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=${QDRANT_DATA_DIR}
+
+[Install]
+WantedBy=multi-user.target

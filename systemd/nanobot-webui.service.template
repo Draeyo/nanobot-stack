@@ -1,0 +1,28 @@
+[Unit]
+Description=nanobot-webui
+After=network.target nanobot.service
+
+[Service]
+User=${APP_USER}
+Group=${APP_GROUP}
+WorkingDirectory=${WEBUI_HOME}
+ExecStart=${LOCAL_BIN_DIR}/nanobot-webui-start
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=${WEBUI_HOME}
+
+[Install]
+WantedBy=multi-user.target

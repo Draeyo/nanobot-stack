@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# ============================================================================
+# nanobot-stack-restart — Ordered restart with health checks
+# ============================================================================
+
+GREEN='\033[1;32m' YELLOW='\033[1;33m' RED='\033[1;31m' NC='\033[0m'
+log()  { echo -e "${GREEN}[+]${NC} $*"; }
+warn() { echo -e "${YELLOW}[!]${NC} $*"; }
+err()  { echo -e "${RED}[-]${NC} $*" >&2; }
+
+wait_for() {
+  local url="$1" label="$2" timeout="${3:-30}"
+  local elapsed=0
+  while (( elapsed < timeout )); do
+    if curl -fsS --max-time 3 "$url" >/dev/null 2>&1; then
+      log "  ✓ ${label}"
+      return 0
+    fi
+    sleep 2
+    elapsed=$(( elapsed + 2 ))
+  done
+  warn "  ✗ ${label} not healthy after ${timeout}s"
+  return 1
+}
+
+log "Restarting nanobot stack (ordered)..."
+
+# 1. Qdrant
+log "Restarting Qdrant..."
+systemctl restart qdrant
+wait_for "http://${QDRANT_BIND}:${QDRANT_HTTP_PORT}/healthz" "Qdrant" 20
+
+# 2. Langfuse
+if systemctl is-enabled --quiet langfuse-compose 2>/dev/null; then
+  log "Restarting Langfuse..."
+  systemctl restart langfuse-compose.service
+  wait_for "http://${LANGFUSE_BIND}:${LANGFUSE_WEB_PORT}" "Langfuse" 60
+fi
+
+# 3. RAG bridge
+log "Restarting RAG bridge..."
+systemctl restart nanobot-rag
+wait_for "http://${RAG_BIND}:${RAG_PORT}/healthz" "RAG bridge" 30
+
+# 4. Nanobot
+log "Restarting nanobot..."
+systemctl restart nanobot
+sleep 3
+if systemctl is-active --quiet nanobot; then
+  log "  ✓ nanobot"
+else
+  warn "  ✗ nanobot failed to start — check: journalctl -u nanobot -n 30"
+fi
+
+# 5. WebUI (optional)
+if systemctl is-enabled --quiet nanobot-webui 2>/dev/null; then
+  log "Restarting WebUI..."
+  systemctl restart nanobot-webui
+  sleep 2
+  if systemctl is-active --quiet nanobot-webui; then
+    log "  ✓ nanobot-webui"
+  else
+    warn "  ✗ nanobot-webui"
+  fi
+fi
+
+echo ""
+log "All services restarted."
+log "Run: nanobot-stack-selftest"

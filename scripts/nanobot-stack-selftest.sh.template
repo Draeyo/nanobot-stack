@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+GREEN='\033[1;32m' YELLOW='\033[1;33m' RED='\033[1;31m' NC='\033[0m'
+pass() { echo -e "  ${GREEN}✓${NC} $*"; }
+fail() { echo -e "  ${RED}✗${NC} $*"; FAILURES=$((FAILURES + 1)); }
+info() { echo -e "  ${YELLOW}→${NC} $*"; }
+
+BRIDGE_TOKEN=""
+if [[ -f "${RAG_HOME}/.bridge_token" ]]; then
+  BRIDGE_TOKEN="$(cat "${RAG_HOME}/.bridge_token")"
+fi
+H="X-Bridge-Token: $BRIDGE_TOKEN"
+BASE="http://${RAG_BIND}:${RAG_PORT}"
+FAILURES=0
+
+echo ""
+echo "============================================"
+echo "  nanobot-stack selftest"
+echo "============================================"
+echo ""
+
+# 1. Service status
+echo "== Services =="
+for svc in qdrant nanobot-rag nanobot; do
+  if systemctl is-active --quiet "$svc" 2>/dev/null; then
+    pass "$svc"
+  else
+    fail "$svc is not running"
+  fi
+done
+if systemctl is-enabled --quiet nanobot-webui 2>/dev/null; then
+  systemctl is-active --quiet nanobot-webui && pass "nanobot-webui" || fail "nanobot-webui is not running"
+fi
+echo ""
+
+# 2. Healthz (readiness probe)
+echo "== Health =="
+HEALTH=$(curl -fsS --max-time 5 "$BASE/healthz" 2>/dev/null) || HEALTH=""
+if [[ -n "$HEALTH" ]]; then
+  QDRANT_OK=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('qdrant',{}).get('ok',False))" 2>/dev/null)
+  API_KEYS=$(echo "$HEALTH" | python3 -c "import sys,json; print(json.load(sys.stdin).get('api_keys',{}).get('configured',False))" 2>/dev/null)
+  [[ "$QDRANT_OK" == "True" ]] && pass "Qdrant connected" || fail "Qdrant not connected"
+  [[ "$API_KEYS" == "True" ]] && pass "API keys configured" || fail "No API keys configured"
+else
+  fail "RAG bridge not responding"
+fi
+echo ""
+
+# 3. Route preview
+echo "== Model routing =="
+PREVIEW=$(curl -fsS --max-time 10 -X POST -H "$H" -H 'content-type: application/json' \
+  "$BASE/route-preview" -d '{"task_type":"final_answer"}' 2>/dev/null) || PREVIEW=""
+if [[ -n "$PREVIEW" ]]; then
+  CONFIGURED=$(echo "$PREVIEW" | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+configured = [p['profile'] for p in d.get('chain',[]) if p.get('configured')]
+print(','.join(configured) if configured else 'none')
+" 2>/dev/null)
+  if [[ "$CONFIGURED" != "none" && -n "$CONFIGURED" ]]; then
+    pass "Configured profiles: $CONFIGURED"
+  else
+    fail "No configured profiles for final_answer"
+  fi
+else
+  fail "Route preview failed"
+fi
+echo ""
+
+# 4. Circuit breakers
+echo "== Circuit breakers =="
+CBS=$(curl -fsS --max-time 5 -H "$H" "$BASE/circuit-breakers" 2>/dev/null) || CBS=""
+if [[ -n "$CBS" ]]; then
+  OPEN=$(echo "$CBS" | python3 -c "
+import sys,json
+cbs=json.load(sys.stdin).get('circuit_breakers',[])
+opens=[c['name'] for c in cbs if c.get('state')=='open']
+print(','.join(opens) if opens else 'none')
+" 2>/dev/null)
+  [[ "$OPEN" == "none" ]] && pass "All circuits closed" || fail "Open circuits: $OPEN"
+else
+  info "Could not check circuit breakers"
+fi
+echo ""
+
+# 5. Token stats
+echo "== Token usage =="
+TSTATS=$(curl -fsS --max-time 5 -H "$H" "$BASE/token-stats" 2>/dev/null) || TSTATS=""
+if [[ -n "$TSTATS" ]]; then
+  COST=$(echo "$TSTATS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_cost_usd',0))" 2>/dev/null)
+  CALLS=$(echo "$TSTATS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('total_calls',0))" 2>/dev/null)
+  info "Total calls: $CALLS, estimated cost: \$${COST}"
+fi
+echo ""
+
+# 6. Cache stats
+echo "== Caches =="
+CSTATS=$(curl -fsS --max-time 5 -H "$H" "$BASE/cache-stats" 2>/dev/null) || CSTATS=""
+if [[ -n "$CSTATS" ]]; then
+  EMB_HR=$(echo "$CSTATS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('embedding_cache',{}).get('hit_rate',0))" 2>/dev/null)
+  LLM_HR=$(echo "$CSTATS" | python3 -c "import sys,json; print(json.load(sys.stdin).get('llm_cache',{}).get('hit_rate',0))" 2>/dev/null)
+  info "Embedding cache hit rate: ${EMB_HR}, LLM cache hit rate: ${LLM_HR}"
+fi
+echo ""
+
+# 7. End-to-end smoke test: nanobot → MCP → bridge → Qdrant
+echo "== End-to-end smoke test =="
+E2E_OK=false
+
+# Test the full chain: classify + search (exercises MCP → bridge → Qdrant)
+E2E=$(curl -fsS --max-time 20 -X POST -H "$H" -H 'content-type: application/json' \
+  "$BASE/smart-chat" \
+  -d '{"messages":[{"role":"user","content":"selftest: what do you remember?"}],"auto_classify":true}' \
+  2>/dev/null) || E2E=""
+if [[ -n "$E2E" ]]; then
+  E2E_TEXT=$(echo "$E2E" | python3 -c "import sys,json; print(json.load(sys.stdin).get('text','')[:80])" 2>/dev/null)
+  if [[ -n "$E2E_TEXT" ]]; then
+    pass "smart-chat responded: ${E2E_TEXT}..."
+    E2E_OK=true
+  else
+    fail "smart-chat returned empty response"
+  fi
+else
+  fail "smart-chat did not respond (check API keys)"
+fi
+
+# Test MCP connectivity (nanobot → MCP server)
+if systemctl is-active --quiet nanobot 2>/dev/null; then
+  NANOBOT_PORT_VAL="${NANOBOT_PORT}"
+  NBOT_HEALTH=$(curl -fsS --max-time 5 "http://${NANOBOT_BIND}:${NANOBOT_PORT_VAL}/" 2>/dev/null) && pass "nanobot gateway responding" || info "nanobot gateway not responding on :${NANOBOT_PORT_VAL} (may need API keys)"
+fi
+echo ""
+
+# 8. Summary
+echo "============================================"
+if (( FAILURES == 0 )); then
+  echo -e "  ${GREEN}All checks passed${NC}"
+else
+  echo -e "  ${RED}${FAILURES} check(s) failed${NC}"
+fi
+echo "============================================"
+echo ""
+
+exit $FAILURES

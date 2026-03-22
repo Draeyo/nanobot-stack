@@ -1,0 +1,50 @@
+http:
+  routers:
+    nanobot:
+      rule: "Host(`${NANOBOT_DOMAIN}`)"
+      entryPoints: [websecure]
+      service: nanobot-svc
+      middlewares: [authentik-forwardauth]
+      tls: {}
+
+    rag:
+      rule: "Host(`${RAG_DOMAIN}`)"
+      entryPoints: [websecure]
+      service: rag-svc
+      middlewares: [authentik-forwardauth]
+      tls: {}
+
+    observability:
+      rule: "Host(`${LANGFUSE_DOMAIN}`)"
+      entryPoints: [websecure]
+      service: langfuse-svc
+      middlewares: [authentik-forwardauth]
+      tls: {}
+
+    webui:
+      rule: "Host(`${WEBUI_DOMAIN}`)"
+      entryPoints: [websecure]
+      service: webui-svc
+      middlewares: [authentik-forwardauth]
+      tls: {}
+
+  services:
+    nanobot-svc:
+      loadBalancer:
+        servers:
+          - url: "http://${NANOBOT_BIND}:${NANOBOT_PORT}"
+
+    rag-svc:
+      loadBalancer:
+        servers:
+          - url: "http://${RAG_BIND}:${RAG_PORT}"
+
+    langfuse-svc:
+      loadBalancer:
+        servers:
+          - url: "http://${LANGFUSE_BIND}:${LANGFUSE_WEB_PORT}"
+
+    webui-svc:
+      loadBalancer:
+        servers:
+          - url: "http://${WEBUI_BIND}:${WEBUI_PORT}"

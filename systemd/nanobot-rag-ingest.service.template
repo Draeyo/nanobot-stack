@@ -1,0 +1,7 @@
+[Unit]
+Description=nanobot RAG bridge periodic ingestion
+After=nanobot-rag.service
+
+[Service]
+Type=oneshot
+ExecStart=${LOCAL_BIN_DIR}/nanobot-rag-ingest

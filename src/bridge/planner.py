@@ -1,0 +1,137 @@
+"""Multi-step task planning and execution.
+
+Decomposes complex queries into step-by-step plans and executes each step
+using the appropriate tool/model.
+"""
+from __future__ import annotations
+import json, logging, os, uuid
+from datetime import datetime, timezone
+from typing import Any
+
+logger = logging.getLogger("rag-bridge.planner")
+PLANNER_ENABLED = os.getenv("PLANNER_ENABLED", "true").lower() == "true"
+
+PLAN_PROMPT = """You are a task planner. Decompose the user's request into sequential steps.
+Each step should be a concrete, actionable task.
+
+Return ONLY JSON:
+{
+  "goal": "one-line description of the overall goal",
+  "steps": [
+    {"id": 1, "action": "search_memory|ask_rag|run_command|web_fetch|generate_text|notify", "description": "what to do", "input": "parameters or query for this step", "depends_on": []},
+    {"id": 2, "action": "generate_text", "description": "synthesise results", "input": "...", "depends_on": [1]}
+  ],
+  "estimated_steps": 3
+}
+
+Available actions:
+- search_memory: search vector memory for relevant info
+- ask_rag: ask a retrieval-grounded question
+- generate_text: use an LLM to write/analyse/summarise
+- run_command: execute a pre-approved shell command (read-only)
+- web_fetch: fetch a URL and extract content
+- notify: send a notification
+- remember: store something in memory
+
+Keep plans to 2-6 steps. Prefer fewer, broader steps over many tiny ones."""
+
+
+def create_plan(query: str, run_chat_fn, context: str = "") -> dict[str, Any]:
+    if not PLANNER_ENABLED:
+        return {"plan": None, "error": "planner disabled"}
+    prompt = query
+    if context:
+        prompt = f"Context:\n{context}\n\nRequest:\n{query}"
+    try:
+        result = run_chat_fn("tool_planning", [
+            {"role": "system", "content": PLAN_PROMPT},
+            {"role": "user", "content": prompt[:4000]},
+        ], json_mode=True, max_tokens=1000)
+        plan = json.loads(result["text"])
+        plan["plan_id"] = str(uuid.uuid4())[:8]
+        plan["created_at"] = datetime.now(timezone.utc).isoformat()
+        plan["status"] = "created"
+        return {"plan": plan, "attempts": result.get("attempts", [])}
+    except Exception as exc:
+        logger.warning("Planning failed: %s", exc)
+        return {"plan": None, "error": str(exc)}
+
+
+def execute_step(step: dict[str, Any], step_results: dict[int, Any],
+                 run_chat_fn, search_fn=None, ask_fn=None,
+                 shell_fn=None, web_fn=None, remember_fn=None, notify_fn=None) -> dict[str, Any]:
+    """Execute a single plan step using the appropriate tool."""
+    action = step.get("action", "generate_text")
+    description = step.get("description", "")
+    step_input = step.get("input", "")
+
+    # Inject results from dependencies
+    deps = step.get("depends_on", [])
+    dep_context = ""
+    for dep_id in deps:
+        dep_result = step_results.get(dep_id)
+        if dep_result:
+            dep_context += f"\n[Result from step {dep_id}]: {str(dep_result)[:1500]}\n"
+
+    full_input = f"{step_input}\n{dep_context}".strip() if dep_context else step_input
+
+    try:
+        if action == "search_memory" and search_fn:
+            result = search_fn(full_input)
+            return {"status": "ok", "action": action, "result": result}
+
+        elif action == "ask_rag" and ask_fn:
+            result = ask_fn(full_input)
+            return {"status": "ok", "action": action, "result": result}
+
+        elif action == "run_command" and shell_fn:
+            result = shell_fn(full_input)
+            return {"status": "ok", "action": action, "result": result}
+
+        elif action == "web_fetch" and web_fn:
+            result = web_fn(full_input)
+            return {"status": "ok", "action": action, "result": result}
+
+        elif action == "remember" and remember_fn:
+            result = remember_fn(full_input)
+            return {"status": "ok", "action": action, "result": result}
+
+        elif action == "notify" and notify_fn:
+            result = notify_fn(full_input)
+            return {"status": "ok", "action": action, "result": result}
+
+        else:
+            # Default: generate_text
+            result = run_chat_fn("fallback_general", [
+                {"role": "system", "content": f"Task: {description}"},
+                {"role": "user", "content": full_input[:4000]},
+            ], max_tokens=1800)
+            return {"status": "ok", "action": "generate_text", "result": result["text"]}
+
+    except Exception as exc:
+        logger.warning("Step execution failed (%s): %s", action, exc)
+        return {"status": "error", "action": action, "error": str(exc)}
+
+
+def execute_plan(plan: dict[str, Any], run_chat_fn, **tool_fns) -> dict[str, Any]:
+    """Execute all steps in a plan sequentially."""
+    steps = plan.get("steps", [])
+    results: dict[int, Any] = {}
+    step_outputs = []
+
+    for step in steps:
+        step_id = step.get("id", 0)
+        output = execute_step(step, results, run_chat_fn, **tool_fns)
+        results[step_id] = output.get("result", output.get("error", ""))
+        step_outputs.append({"step": step, "output": output})
+
+        if output.get("status") == "error":
+            logger.warning("Plan step %d failed, continuing...", step_id)
+
+    return {
+        "plan_id": plan.get("plan_id", ""),
+        "goal": plan.get("goal", ""),
+        "steps_executed": len(step_outputs),
+        "results": step_outputs,
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }

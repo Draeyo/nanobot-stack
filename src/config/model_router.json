@@ -1,0 +1,255 @@
+{
+  "version": 3,
+  "embeddings": {
+    "chain": ["embed_openai_primary", "embed_openrouter_backup", "local_embed"]
+  },
+  "profiles": {
+    "embed_openai_primary": {
+      "kind": "embedding",
+      "provider": "openai",
+      "model": "text-embedding-3-large",
+      "api_key_env": "OPENAI_API_KEY",
+      "api_base_env": "OPENAI_BASE_URL",
+      "timeout": 45
+    },
+    "embed_openrouter_backup": {
+      "kind": "embedding",
+      "provider": "openrouter",
+      "model": "openai/text-embedding-3-large",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "api_base_env": "OPENROUTER_BASE_URL",
+      "timeout": 45
+    },
+
+    "router_fast": {
+      "kind": "chat",
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "api_base_env": "OPENAI_BASE_URL",
+      "temperature": 0,
+      "max_tokens": 300,
+      "timeout": 40
+    },
+    "classifier_backup": {
+      "kind": "chat",
+      "provider": "openrouter",
+      "model": "openrouter/openai/gpt-4.1-mini",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "api_base_env": "OPENROUTER_BASE_URL",
+      "temperature": 0,
+      "max_tokens": 300,
+      "timeout": 40
+    },
+
+    "reasoning_primary": {
+      "kind": "chat",
+      "provider": "anthropic",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "api_base_env": "ANTHROPIC_BASE_URL",
+      "temperature": 0.2,
+      "max_tokens": 1800,
+      "timeout": 90
+    },
+    "reasoning_backup": {
+      "kind": "chat",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "api_key_env": "OPENAI_API_KEY",
+      "api_base_env": "OPENAI_BASE_URL",
+      "temperature": 0.2,
+      "max_tokens": 1800,
+      "timeout": 90
+    },
+
+    "coding_primary": {
+      "kind": "chat",
+      "provider": "anthropic",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "api_base_env": "ANTHROPIC_BASE_URL",
+      "temperature": 0.1,
+      "max_tokens": 2200,
+      "timeout": 120
+    },
+    "coding_backup": {
+      "kind": "chat",
+      "provider": "openrouter",
+      "model": "openrouter/anthropic/claude-sonnet-4-20250514",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "api_base_env": "OPENROUTER_BASE_URL",
+      "temperature": 0.1,
+      "max_tokens": 2200,
+      "timeout": 120
+    },
+
+    "cheap_rewrite": {
+      "kind": "chat",
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "api_base_env": "OPENAI_BASE_URL",
+      "temperature": 0.2,
+      "max_tokens": 900,
+      "timeout": 45
+    },
+    "cheap_rewrite_backup": {
+      "kind": "chat",
+      "provider": "openrouter",
+      "model": "openrouter/openai/gpt-4.1-mini",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "api_base_env": "OPENROUTER_BASE_URL",
+      "temperature": 0.2,
+      "max_tokens": 900,
+      "timeout": 45
+    },
+
+    "premium_answer": {
+      "kind": "chat",
+      "provider": "anthropic",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "api_base_env": "ANTHROPIC_BASE_URL",
+      "temperature": 0.2,
+      "max_tokens": 2400,
+      "timeout": 120
+    },
+    "premium_answer_backup": {
+      "kind": "chat",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "api_key_env": "OPENAI_API_KEY",
+      "api_base_env": "OPENAI_BASE_URL",
+      "temperature": 0.2,
+      "max_tokens": 2400,
+      "timeout": 120
+    },
+
+    "json_extract_primary": {
+      "kind": "chat",
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "api_base_env": "OPENAI_BASE_URL",
+      "temperature": 0,
+      "max_tokens": 1000,
+      "timeout": 45
+    },
+    "json_extract_backup": {
+      "kind": "chat",
+      "provider": "openrouter",
+      "model": "openrouter/openai/gpt-4.1-mini",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "api_base_env": "OPENROUTER_BASE_URL",
+      "temperature": 0,
+      "max_tokens": 1000,
+      "timeout": 45
+    },
+
+    "triage_fast": {
+      "kind": "chat",
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "api_base_env": "OPENAI_BASE_URL",
+      "temperature": 0,
+      "max_tokens": 700,
+      "timeout": 35
+    },
+    "triage_backup": {
+      "kind": "chat",
+      "provider": "openrouter",
+      "model": "openrouter/openai/gpt-4.1-mini",
+      "api_key_env": "OPENROUTER_API_KEY",
+      "api_base_env": "OPENROUTER_BASE_URL",
+      "temperature": 0,
+      "max_tokens": 700,
+      "timeout": 35
+    },
+
+    "translation_primary": {
+      "kind": "chat",
+      "provider": "openai",
+      "model": "gpt-4.1-mini",
+      "api_key_env": "OPENAI_API_KEY",
+      "api_base_env": "OPENAI_BASE_URL",
+      "temperature": 0.1,
+      "max_tokens": 1200,
+      "timeout": 45
+    },
+    "translation_backup": {
+      "kind": "chat",
+      "provider": "anthropic",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "api_base_env": "ANTHROPIC_BASE_URL",
+      "temperature": 0.1,
+      "max_tokens": 1200,
+      "timeout": 60
+    },
+
+    "vision_primary": {
+      "kind": "chat",
+      "provider": "openai",
+      "model": "gpt-4.1",
+      "api_key_env": "OPENAI_API_KEY",
+      "api_base_env": "OPENAI_BASE_URL",
+      "temperature": 0.1,
+      "max_tokens": 500,
+      "timeout": 60
+    },
+    "vision_backup": {
+      "kind": "chat",
+      "provider": "anthropic",
+      "model": "anthropic/claude-sonnet-4-20250514",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "api_base_env": "ANTHROPIC_BASE_URL",
+      "temperature": 0.1,
+      "max_tokens": 500,
+      "timeout": 60
+    },
+
+    "local_fast": {
+      "kind": "chat",
+      "provider": "ollama",
+      "model": "ollama/qwen2.5:7b",
+      "api_key_env": "OLLAMA_API_KEY",
+      "api_base_env": "OLLAMA_BASE_URL",
+      "temperature": 0.2,
+      "max_tokens": 1200,
+      "timeout": 120
+    },
+    "local_embed": {
+      "kind": "embedding",
+      "provider": "ollama",
+      "model": "ollama/nomic-embed-text",
+      "api_key_env": "OLLAMA_API_KEY",
+      "api_base_env": "OLLAMA_BASE_URL",
+      "timeout": 30
+    }
+  },
+  "task_routes": {
+    "router_decision": ["router_fast", "classifier_backup", "local_fast"],
+    "classify_query": ["router_fast", "classifier_backup", "local_fast"],
+    "query_rewrite": ["cheap_rewrite", "cheap_rewrite_backup", "local_fast"],
+    "search_synthesis": ["cheap_rewrite", "cheap_rewrite_backup", "local_fast"],
+    "remember_extract": ["json_extract_primary", "json_extract_backup", "local_fast"],
+    "memory_summary": ["cheap_rewrite", "cheap_rewrite_backup", "local_fast"],
+    "conversation_summary": ["cheap_rewrite", "cheap_rewrite_backup", "local_fast"],
+    "project_summary": ["cheap_rewrite", "cheap_rewrite_backup", "local_fast"],
+    "project_decision": ["reasoning_primary", "reasoning_backup", "local_fast"],
+    "runbook_summary": ["reasoning_primary", "reasoning_backup", "local_fast"],
+    "incident_triage": ["triage_fast", "triage_backup", "local_fast"],
+    "tool_planning": ["reasoning_primary", "reasoning_backup", "local_fast"],
+    "code_reasoning": ["coding_primary", "coding_backup", "reasoning_backup", "local_fast"],
+    "structured_extraction": ["json_extract_primary", "json_extract_backup", "local_fast"],
+    "rewrite_polish": ["cheap_rewrite", "cheap_rewrite_backup", "local_fast"],
+    "translation": ["translation_primary", "translation_backup", "local_fast"],
+    "critique_review": ["reasoning_primary", "reasoning_backup", "local_fast"],
+    "retrieval_answer": ["premium_answer", "premium_answer_backup", "reasoning_backup", "local_fast"],
+    "final_answer": ["premium_answer", "premium_answer_backup", "reasoning_backup", "local_fast"],
+    "fallback_general": ["premium_answer", "premium_answer_backup", "reasoning_backup", "local_fast"],
+    "vision_describe": ["vision_primary", "vision_backup"]
+  }
+}

@@ -1,0 +1,30 @@
+[Unit]
+Description=nanobot gateway
+After=network-online.target qdrant.service nanobot-rag.service
+Wants=network-online.target
+
+[Service]
+User=${APP_USER}
+Group=${APP_GROUP}
+WorkingDirectory=${NANOBOT_HOME}
+EnvironmentFile=${NANOBOT_HOME}/config/.env
+ExecStart=${LOCAL_BIN_DIR}/nanobot-start
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+LockPersonality=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+ReadWritePaths=${NANOBOT_HOME}
+
+[Install]
+WantedBy=multi-user.target

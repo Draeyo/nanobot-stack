@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# ============================================================================
+# nanobot-setup-keys — Interactive API key configuration
+# ============================================================================
+# Asks for API keys once and writes them to all relevant .env files.
+# Validates each key before saving.
+# ============================================================================
+
+RAG_ENV="${RAG_HOME}/.env"
+NANOBOT_ENV="${NANOBOT_HOME}/config/.env"
+
+GREEN='\033[1;32m' YELLOW='\033[1;33m' RED='\033[1;31m' NC='\033[0m'
+log()  { echo -e "${GREEN}[+]${NC} $*"; }
+warn() { echo -e "${YELLOW}[!]${NC} $*"; }
+err()  { echo -e "${RED}[-]${NC} $*" >&2; }
+
+set_key_in_env() {
+  local file="$1" key="$2" value="$3"
+  if grep -q "^${key}=" "$file" 2>/dev/null; then
+    sed -i "s|^${key}=.*|${key}=${value}|" "$file"
+  else
+    echo "${key}=${value}" >> "$file"
+  fi
+}
+
+validate_openai() {
+  local key="$1"
+  if curl -fsS --max-time 10 -H "Authorization: Bearer $key" \
+    "https://api.openai.com/v1/models" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+validate_anthropic() {
+  local key="$1"
+  local resp
+  resp=$(curl -sS --max-time 10 -H "x-api-key: $key" \
+    -H "anthropic-version: 2023-06-01" \
+    "https://api.anthropic.com/v1/messages" \
+    -d '{"model":"claude-sonnet-4-20250514","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}' 2>&1)
+  # Any response that isn't an auth error means the key works
+  if echo "$resp" | grep -q '"authentication_error"'; then
+    return 1
+  fi
+  return 0
+}
+
+validate_openrouter() {
+  local key="$1"
+  if curl -fsS --max-time 10 -H "Authorization: Bearer $key" \
+    "https://openrouter.ai/api/v1/models" >/dev/null 2>&1; then
+    return 0
+  fi
+  return 1
+}
+
+echo ""
+echo "============================================"
+echo "  nanobot-stack — API Key Setup"
+echo "============================================"
+echo ""
+echo "Enter your API keys below. Press Enter to skip a provider."
+echo "You need at least one provider configured."
+echo ""
+
+save_or_reject() {
+  local provider="$1" key_name="$2" key_value="$3"
+  warn "${provider} key validation failed."
+  read -rp "  Save anyway? (s=save, r=retry, n=skip) [s/r/n]: " choice
+  case "$choice" in
+    s|S)
+      set_key_in_env "$RAG_ENV" "$key_name" "$key_value"
+      set_key_in_env "$NANOBOT_ENV" "$key_name" "$key_value"
+      warn "  Saved (unvalidated). The healthcheck will flag this if it's wrong."
+      ;;
+    r|R) return 1 ;;  # caller should retry
+    *) log "  Skipped." ;;
+  esac
+  return 0
+}
+
+save_valid_key() {
+  local provider="$1" key_name="$2" key_value="$3"
+  log "${provider} key is valid ✓"
+  set_key_in_env "$RAG_ENV" "$key_name" "$key_value"
+  set_key_in_env "$NANOBOT_ENV" "$key_name" "$key_value"
+}
+
+# OpenAI
+while true; do
+  read -rp "OpenAI API key (sk-...): " OPENAI_KEY
+  if [[ -z "$OPENAI_KEY" ]]; then break; fi
+  echo -n "  Validating... "
+  if validate_openai "$OPENAI_KEY"; then
+    save_valid_key "OpenAI" "OPENAI_API_KEY" "$OPENAI_KEY"
+    break
+  else
+    save_or_reject "OpenAI" "OPENAI_API_KEY" "$OPENAI_KEY" && break
+  fi
+done
+
+# Anthropic
+while true; do
+  read -rp "Anthropic API key (sk-ant-...): " ANTHROPIC_KEY
+  if [[ -z "$ANTHROPIC_KEY" ]]; then break; fi
+  echo -n "  Validating... "
+  if validate_anthropic "$ANTHROPIC_KEY"; then
+    save_valid_key "Anthropic" "ANTHROPIC_API_KEY" "$ANTHROPIC_KEY"
+    break
+  else
+    save_or_reject "Anthropic" "ANTHROPIC_API_KEY" "$ANTHROPIC_KEY" && break
+  fi
+done
+
+# OpenRouter
+while true; do
+  read -rp "OpenRouter API key (sk-or-...): " OPENROUTER_KEY
+  if [[ -z "$OPENROUTER_KEY" ]]; then break; fi
+  echo -n "  Validating... "
+  if validate_openrouter "$OPENROUTER_KEY"; then
+    save_valid_key "OpenRouter" "OPENROUTER_API_KEY" "$OPENROUTER_KEY"
+    break
+  else
+    save_or_reject "OpenRouter" "OPENROUTER_API_KEY" "$OPENROUTER_KEY" && break
+  fi
+done
+
+# Langfuse (optional)
+read -rp "Langfuse public key (optional): " LF_PUB
+if [[ -n "$LF_PUB" ]]; then
+  read -rp "Langfuse secret key: " LF_SEC
+  set_key_in_env "$RAG_ENV" "LANGFUSE_PUBLIC_KEY" "$LF_PUB"
+  set_key_in_env "$RAG_ENV" "LANGFUSE_SECRET_KEY" "$LF_SEC"
+  log "Langfuse keys saved"
+fi
+
+# Check at least one provider is configured
+if [[ -z "$OPENAI_KEY" && -z "$ANTHROPIC_KEY" && -z "$OPENROUTER_KEY" ]]; then
+  warn "No API keys configured. The stack will only work with Ollama (local)."
+else
+  log "API keys saved to:"
+  log "  ${RAG_ENV}"
+  log "  ${NANOBOT_ENV}"
+fi
+
+echo ""
+log "Done. Run: sudo nanobot-stack-restart"

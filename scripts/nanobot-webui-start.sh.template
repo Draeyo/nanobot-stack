@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+cd "${WEBUI_HOME}"
+source .venv/bin/activate
+exec nanobot-webui --host ${WEBUI_BIND} --port ${WEBUI_PORT}

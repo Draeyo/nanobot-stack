@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+cd "${NANOBOT_HOME}"
+source .venv/bin/activate
+set -a; source config/.env; set +a
+
+if nanobot --help 2>/dev/null | grep -q "gateway"; then
+  exec nanobot gateway --config "$NANOBOT_CONFIG_FILE" --host "$HOST" --port "$PORT"
+else
+  exec nanobot agent
+fi

@@ -1,0 +1,20 @@
+[Unit]
+Description=Warm-check nanobot RAG MCP bridge
+After=network-online.target nanobot-rag.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=${APP_USER}
+Group=${APP_GROUP}
+WorkingDirectory=${MCP_HOME}
+EnvironmentFile=${MCP_HOME}/.env
+ExecStart=${MCP_HOME}/.venv/bin/python -c 'import os, httpx; h={"X-Bridge-Token": os.environ.get("RAG_BRIDGE_TOKEN","")}; r=httpx.get(os.environ["RAG_BRIDGE_URL"]+"/healthz", timeout=10, headers=h); r.raise_for_status(); print(r.text)'
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=${MCP_HOME}
+
+[Install]
+WantedBy=multi-user.target
