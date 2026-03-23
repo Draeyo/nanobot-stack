@@ -92,8 +92,9 @@ def run_shell_command(command: str) -> dict[str, Any]:
         }
     except subprocess.TimeoutExpired:
         return {"ok": False, "command": command, "error": f"timeout after {SHELL_TIMEOUT}s"}
-    except Exception as e:
-        return {"ok": False, "command": command, "error": str(e)}
+    except Exception:
+        logger.exception("Unexpected error while running shell command")
+        return {"ok": False, "command": command, "error": "unexpected error running command"}
 
 
 async def web_fetch(url: str) -> dict[str, Any]:
@@ -123,8 +124,9 @@ async def web_fetch(url: str) -> dict[str, Any]:
 
             text = text[:WEB_FETCH_MAX_CHARS]
             return {"ok": True, "url": url, "text": text, "content_type": content_type, "chars": len(text)}
-    except Exception as e:
-        return {"ok": False, "url": url, "error": str(e)}
+    except Exception:
+        logger.exception("web_fetch failed for url=%s", url)
+        return {"ok": False, "url": url, "error": "web fetch failed"}
 
 
 async def send_notification(message: str, title: str = "nanobot", level: str = "info") -> dict[str, Any]:
@@ -147,8 +149,9 @@ async def send_notification(message: str, title: str = "nanobot", level: str = "
                 r = await client.post(webhook_url, content=payload_raw, headers=headers)
                 r.raise_for_status()
                 return {"ok": True, "service": "ntfy", "status": r.status_code}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
+        except Exception:
+            logger.exception("ntfy notification failed")
+            return {"ok": False, "error": "notification delivery failed"}
     else:
         # Generic JSON webhook (Slack/Discord/Telegram bot API compatible)
         payload = {"text": f"**[{title}]** ({level})\n{message}"}
@@ -158,5 +161,6 @@ async def send_notification(message: str, title: str = "nanobot", level: str = "
                 r = await client.post(webhook_url, json=payload, headers=headers)
                 r.raise_for_status()
                 return {"ok": True, "service": "webhook", "status": r.status_code}
-        except Exception as e:
-            return {"ok": False, "error": str(e)}
+        except Exception:
+            logger.exception("webhook notification failed")
+            return {"ok": False, "error": "notification delivery failed"}
