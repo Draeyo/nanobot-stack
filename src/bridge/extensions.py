@@ -1,8 +1,8 @@
 """v8 extension endpoints — mounted onto the main FastAPI app.
 
 Adds: /classify, /conversation-hook, /context-prefetch, /summarize-conversation,
-/compact, /plan, /execute-plan, /smart-chat, /feedback, /feedback-stats,
-/profile, /dashboard
+/compact, /compact-memories, /plan, /execute-step, /smart-chat, /shell,
+/web-fetch, /notify, /feedback, /feedback-stats, /profile, /dashboard
 """
 from __future__ import annotations
 import json, logging
@@ -189,6 +189,13 @@ class CompactIn(BaseModel):
 
 @router.post("/compact")
 def compact_endpoint(body: CompactIn, request: Request):
+    return _compact_logic(body, request)
+
+@router.post("/compact-memories")
+def compact_memories_endpoint(body: CompactIn, request: Request):
+    return _compact_logic(body, request)
+
+def _compact_logic(body: CompactIn, request: Request):
     if _verify_token: _verify_token(request)
     from conversation_memory import compact_memories
 
@@ -404,6 +411,68 @@ def update_profile_endpoint(body: ProfileUpdateIn, request: Request):
     from user_profile import update_profile
     updates = {k: v for k, v in body.model_dump().items() if v is not None}
     return update_profile(updates)
+
+# --------------------------------------------------------------------------
+# Tools: shell, web-fetch, notify
+# --------------------------------------------------------------------------
+class ShellIn(BaseModel):
+    command: str
+
+@router.post("/shell")
+def shell_endpoint(body: ShellIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from tools import run_shell_command
+    return run_shell_command(body.command)
+
+class WebFetchIn(BaseModel):
+    url: str
+
+@router.post("/web-fetch")
+async def web_fetch_endpoint(body: WebFetchIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from tools import web_fetch
+    return await web_fetch(body.url)
+
+class NotifyIn(BaseModel):
+    message: str
+    title: str = "nanobot"
+    level: str = "info"
+
+@router.post("/notify")
+async def notify_endpoint(body: NotifyIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from tools import send_notification
+    return await send_notification(body.message, body.title, body.level)
+
+# --------------------------------------------------------------------------
+# Execute step (from planner)
+# --------------------------------------------------------------------------
+class ExecuteStepIn(BaseModel):
+    tool: str
+    input: dict[str, Any] | None = None
+
+@router.post("/execute-step")
+def execute_step_endpoint(body: ExecuteStepIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from planner import execute_step
+
+    step = {"action": body.tool, "description": body.tool, "input": json.dumps(body.input or {}), "depends_on": []}
+
+    def simple_search(q):
+        return _search_fn(query=q, collections=[], limit=5)
+    def simple_ask(q):
+        results = _search_fn(query=q, collections=[], limit=5)
+        snippets = [r.get("payload", {}).get("text", "")[:500] for r in results.get("results", [])]
+        answer = _run_chat_fn("retrieval_answer", [
+            {"role": "system", "content": "Answer from context."},
+            {"role": "user", "content": json.dumps({"question": q, "context": snippets})},
+        ], max_tokens=1200)
+        return answer.get("text", "")
+    def simple_remember(text):
+        return _remember_fn(text=text, collection="memory_personal", source="planner", summarize=True)
+
+    return execute_step(step, {}, _run_chat_fn,
+                        search_fn=simple_search, ask_fn=simple_ask, remember_fn=simple_remember)
 
 # --------------------------------------------------------------------------
 # Dashboard
