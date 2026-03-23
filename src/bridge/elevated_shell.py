@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import pathlib
+import shlex
 import sqlite3
 import subprocess
 import threading
@@ -224,7 +225,7 @@ def _auto_execute(command: str, description: str = "", proposed_by: str = "agent
 
     try:
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True,
+            shlex.split(command), shell=False, capture_output=True, text=True,
             timeout=ELEVATED_TIMEOUT,
             env={**os.environ, "LANG": "C.UTF-8"},
             check=False,
@@ -345,7 +346,7 @@ def execute_approved(action_id: str) -> dict[str, Any]:
 
     try:
         result = subprocess.run(
-            command, shell=True, capture_output=True, text=True,
+            shlex.split(command), shell=False, capture_output=True, text=True,
             timeout=ELEVATED_TIMEOUT,
             env={**os.environ, "LANG": "C.UTF-8"},
             check=False,

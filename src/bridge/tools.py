@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 import re
+import shlex
 import subprocess
 from typing import Any
 
@@ -82,8 +83,8 @@ def _execute_shell(command: str) -> dict[str, Any]:
     """Internal: actually execute a shell command (no trust check)."""
     try:
         result = subprocess.run(
-            command,
-            shell=True,
+            shlex.split(command),
+            shell=False,
             capture_output=True,
             text=True,
             timeout=SHELL_TIMEOUT,
