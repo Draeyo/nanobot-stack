@@ -1,9 +1,10 @@
-"""v9 extension endpoints — mounted onto the main FastAPI app.
+"""v10 extension endpoints — mounted onto the main FastAPI app.
 
 Adds: /classify, /conversation-hook, /context-prefetch, /summarize-conversation,
 /compact, /plan, /execute-plan, /smart-chat, /feedback, /feedback-stats,
 /profile, /dashboard, /knowledge-graph, /explain, /export, /pii-check,
-/code-execute, /plugins, /query-rewrite, /working-memory
+/code-execute, /plugins, /query-rewrite, /working-memory,
+/workflows, /agent/status, /agent/history, /agent/run
 """
 from __future__ import annotations
 import json, logging
@@ -294,25 +295,13 @@ def _compact_logic(body: CompactIn, request: Request):
         raise HTTPException(status_code=500, detail="Memory compaction failed")
 
 # --------------------------------------------------------------------------
-# Planning (with parallel execution support)
+# Tool adapters — reusable wrappers for planner and agent endpoints
 # --------------------------------------------------------------------------
-class PlanIn(BaseModel):
-    query: str
-    context: str = ""
-    execute: bool = False
-    parallel: bool = True
-
-@router.post("/plan")
-def plan_endpoint(body: PlanIn, request: Request):
-    if _verify_token: _verify_token(request)
-    from planner import create_plan, execute_plan, execute_plan_parallel
-
-    plan_result = create_plan(body.query, _run_chat_fn, body.context)
-    if not body.execute or not plan_result.get("plan"):
-        return plan_result
-
+def _build_tool_registry() -> dict:
+    """Build a dict of tool adapter functions for planner / orchestrator use."""
     def simple_search(q):
         return _search_fn(query=q, collections=[], limit=5)
+
     def simple_ask(q):
         results = _search_fn(query=q, collections=[], limit=5)
         snippets = [r.get("payload", {}).get("text", "")[:500] for r in results.get("results", [])]
@@ -321,6 +310,7 @@ def plan_endpoint(body: PlanIn, request: Request):
             {"role": "user", "content": json.dumps({"question": q, "context": snippets})},
         ], max_tokens=1200)
         return answer.get("text", "")
+
     def simple_remember(text):
         return _remember_fn(text=text, collection="memory_personal", source="planner", summarize=True)
 
@@ -338,8 +328,34 @@ def plan_endpoint(body: PlanIn, request: Request):
         from tools import send_notification
         return asyncio.run(send_notification(msg))
 
-    tool_fns = {"search_fn": simple_search, "ask_fn": simple_ask, "remember_fn": simple_remember,
-                "shell_fn": simple_shell, "web_fn": simple_web_fetch, "notify_fn": simple_notify}
+    return {
+        "search_fn": simple_search, "ask_fn": simple_ask, "remember_fn": simple_remember,
+        "shell_fn": simple_shell, "web_fn": simple_web_fetch, "notify_fn": simple_notify,
+        # Agent-compatible names
+        "run_command": simple_shell, "web_fetch": simple_web_fetch,
+        "notify": simple_notify, "search_memory": simple_search,
+    }
+
+
+# --------------------------------------------------------------------------
+# Planning (with parallel execution support)
+# --------------------------------------------------------------------------
+class PlanIn(BaseModel):
+    query: str
+    context: str = ""
+    execute: bool = False
+    parallel: bool = True
+
+@router.post("/plan")
+def plan_endpoint(body: PlanIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from planner import create_plan, execute_plan, execute_plan_parallel
+
+    plan_result = create_plan(body.query, _run_chat_fn, body.context)
+    if not body.execute or not plan_result.get("plan"):
+        return plan_result
+
+    tool_fns = _build_tool_registry()
 
     if body.parallel:
         execution = execute_plan_parallel(plan_result["plan"], _run_chat_fn, **tool_fns)
@@ -928,3 +944,113 @@ def channel_status_endpoint(request: Request):
     except Exception:
         logger.exception("Failed to get channel status")
         return {"error": "Failed to retrieve channel status", "channels": {}}
+
+
+# --------------------------------------------------------------------------
+# v10: Procedural Workflows
+# --------------------------------------------------------------------------
+@router.get("/workflows")
+def list_workflows_endpoint(request: Request, limit: int = 50):
+    """List learned procedural workflows."""
+    if _verify_token: _verify_token(request)
+    try:
+        from procedural_memory import get_workflows, PROCEDURAL_MEMORY_ENABLED
+        if not PROCEDURAL_MEMORY_ENABLED:
+            return {"workflows": [], "enabled": False}
+        return {"workflows": get_workflows(limit), "enabled": True}
+    except Exception:
+        logger.debug("Procedural memory not available")
+        return {"workflows": [], "enabled": False}
+
+
+class ToggleWorkflowIn(BaseModel):
+    auto_suggest: bool
+
+
+@router.post("/workflows/{workflow_id}/toggle")
+def toggle_workflow_endpoint(workflow_id: int, body: ToggleWorkflowIn, request: Request):
+    """Enable or disable auto-suggestion for a workflow."""
+    if _verify_token: _verify_token(request)
+    try:
+        from procedural_memory import toggle_auto_suggest
+        return toggle_auto_suggest(workflow_id, body.auto_suggest)
+    except Exception:
+        logger.exception("Failed to toggle workflow %s", workflow_id)
+        return {"ok": False, "error": "procedural memory not available"}
+
+
+# --------------------------------------------------------------------------
+# v10: Agent Orchestrator
+# --------------------------------------------------------------------------
+_agent_history: list[dict] = []
+
+
+@router.get("/agent/status")
+def agent_status_endpoint(request: Request):
+    """List registered agents and their capabilities."""
+    if _verify_token: _verify_token(request)
+    try:
+        from agents import list_agents
+        return {"agents": list_agents(), "orchestrator_enabled": _is_orchestrator_enabled()}
+    except Exception:
+        return {"agents": [], "orchestrator_enabled": False}
+
+
+@router.get("/agent/history")
+def agent_history_endpoint(request: Request, limit: int = 50):
+    """Return recent agent execution history."""
+    if _verify_token: _verify_token(request)
+    return {"executions": _agent_history[-limit:]}
+
+
+class AgentRunIn(BaseModel):
+    task: str
+    context: dict = {}
+
+
+@router.post("/agent/run")
+def agent_run_endpoint(body: AgentRunIn, request: Request):
+    """Run a task through the orchestrator agent."""
+    if _verify_token: _verify_token(request)
+    if not _is_orchestrator_enabled():
+        return {"ok": False, "error": "Agent orchestrator is disabled (AGENT_ORCHESTRATOR_ENABLED=false)"}
+
+    try:
+        import asyncio
+        from agents import get_agent_class
+        orch_cls = get_agent_class("orchestrator")
+        if not orch_cls:
+            return {"ok": False, "error": "Orchestrator agent not registered"}
+
+        tool_registry = _build_tool_registry()
+        agent = orch_cls(run_chat_fn=_run_chat_fn, tool_registry=tool_registry)
+        result = asyncio.run(agent.run(body.task, body.context))
+
+        # Record in history
+        from datetime import datetime, timezone
+        _agent_history.append({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "agent": "orchestrator",
+            "task": body.task[:200],
+            "status": result.status,
+            "tokens": result.cost_tokens,
+        })
+        # Cap history
+        if len(_agent_history) > 200:
+            _agent_history[:] = _agent_history[-200:]
+
+        return {
+            "ok": True,
+            "status": result.status,
+            "output": result.output,
+            "actions_taken": result.actions_taken,
+            "cost_tokens": result.cost_tokens,
+        }
+    except Exception:
+        logger.exception("Agent run failed")
+        return {"ok": False, "error": "agent execution failed"}
+
+
+def _is_orchestrator_enabled() -> bool:
+    import os
+    return os.getenv("AGENT_ORCHESTRATOR_ENABLED", "false").lower() == "true"
