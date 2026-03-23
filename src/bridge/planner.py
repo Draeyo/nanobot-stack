@@ -63,7 +63,7 @@ def create_plan(query: str, run_chat_fn, context: str = "") -> dict[str, Any]:
         plan["plan_id"] = str(uuid.uuid4())[:8]
         plan["created_at"] = datetime.now(timezone.utc).isoformat()
         plan["status"] = "created"
-        return {"plan": plan, "attempts": result.get("attempts", [])}
+        return {"plan": plan}
     except Exception as exc:
         logger.warning("Planning failed: %s", exc)
         return {"plan": None, "error": "planning failed"}
