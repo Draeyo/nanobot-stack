@@ -178,7 +178,14 @@ def propose_config_change(file_name: str, content: str,
     # Stage the content
     change_id = uuid.uuid4().hex[:12]
     STAGING_DIR.mkdir(parents=True, exist_ok=True)
-    staging_file = STAGING_DIR / f"{change_id}_{file_name}"
+    staging_file = (STAGING_DIR / f"{change_id}_{file_name}").resolve()
+    try:
+        STAGING_DIR.resolve()
+    except FileNotFoundError:
+        # If STAGING_DIR was removed between mkdir and here, fail safely
+        return {"ok": False, "error": "Staging directory is unavailable."}
+    if staging_file.parent != STAGING_DIR.resolve():
+        return {"ok": False, "error": "Invalid file name for staging."}
     staging_file.write_text(content, encoding="utf-8")
 
     now = datetime.now(timezone.utc)
