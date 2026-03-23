@@ -57,8 +57,8 @@ def _validate_topics_frequency(sections: list[str], cron: str) -> None:
             raise HTTPException(400, detail="Section 'topics' cannot be used with cron intervals < 6h (LLM cost risk)")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("Could not validate topics frequency for cron '%s': %s", cron, e)
 
 
 class JobCreate(BaseModel):
@@ -87,12 +87,12 @@ class JobUpdate(BaseModel):
     enabled: bool | None = None
 
 
-@router.get("/jobs")
+@router.get("/jobs", dependencies=_auth())
 def list_jobs():
     return _manager.list_jobs()
 
 
-@router.post("/jobs", status_code=201)
+@router.post("/jobs", status_code=201, dependencies=_auth())
 def create_job(body: JobCreate):
     _validate_cron(body.cron)
     _validate_sections(body.sections)
@@ -105,7 +105,7 @@ def create_job(body: JobCreate):
     return _manager.get_job(job_id)
 
 
-@router.get("/jobs/{job_id}")
+@router.get("/jobs/{job_id}", dependencies=_auth())
 def get_job(job_id: str):
     job = _manager.get_job(job_id)
     if not job:
@@ -113,7 +113,7 @@ def get_job(job_id: str):
     return job
 
 
-@router.put("/jobs/{job_id}")
+@router.put("/jobs/{job_id}", dependencies=_auth())
 def update_job(job_id: str, body: JobUpdate):
     job = _manager.get_job(job_id)
     if not job:
@@ -132,7 +132,7 @@ def update_job(job_id: str, body: JobUpdate):
     return _manager.get_job(job_id)
 
 
-@router.delete("/jobs/{job_id}", status_code=204)
+@router.delete("/jobs/{job_id}", status_code=204, dependencies=_auth())
 def delete_job(job_id: str):
     try:
         _manager.delete_job(job_id)
@@ -140,7 +140,7 @@ def delete_job(job_id: str):
         raise HTTPException(403, detail=str(e))
 
 
-@router.post("/jobs/{job_id}/run")
+@router.post("/jobs/{job_id}/run", dependencies=_auth())
 def run_job_now(job_id: str, background_tasks: BackgroundTasks):
     job = _manager.get_job(job_id)
     if not job:
@@ -151,7 +151,7 @@ def run_job_now(job_id: str, background_tasks: BackgroundTasks):
     return {"queued": True, "job_id": job_id}
 
 
-@router.post("/jobs/{job_id}/toggle")
+@router.post("/jobs/{job_id}/toggle", dependencies=_auth())
 def toggle_job(job_id: str, enabled: bool):
     job = _manager.get_job(job_id)
     if not job:
@@ -160,6 +160,6 @@ def toggle_job(job_id: str, enabled: bool):
     return _manager.get_job(job_id)
 
 
-@router.get("/jobs/{job_id}/history")
+@router.get("/jobs/{job_id}/history", dependencies=_auth())
 def job_history(job_id: str, limit: int = 30, offset: int = 0):
     return _manager.get_job_history(job_id, limit=min(limit, 100), offset=offset)
