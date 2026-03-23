@@ -1,6 +1,8 @@
 [MASTER]
+# Ensure src/bridge is importable when running pylint from repo root (e.g. CI)
+init-hook='import sys; sys.path.insert(0, "src/bridge")'
 # Allow importing third-party packages without install in CI base environment
-ignored-modules=dotenv,fastapi,litellm,pydantic,qdrant_client,langfuse,starlette,httpx,mcp,sentence_transformers,pythonjsonlogger,prometheus_fastapi_instrumentator,pypdf,docx,bs4
+ignored-modules=dotenv,fastapi,litellm,pydantic,qdrant_client,langfuse,starlette,httpx,mcp,sentence_transformers,pythonjsonlogger,prometheus_fastapi_instrumentator,pypdf,docx,bs4,apscheduler,croniter,pii_scanner,pytest
 
 [FORMAT]
 # Project uses longer lines; 200 chars is a practical upper limit

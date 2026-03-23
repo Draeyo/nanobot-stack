@@ -991,6 +991,123 @@ SECTION_ADVANCED = """
 """
 
 # ---------------------------------------------------------------------------
+# Section: Scheduler
+# ---------------------------------------------------------------------------
+SECTION_SCHEDULER = """
+<section x-show="tab==='scheduler'" x-cloak>
+  <div x-data="schedulerSection()" x-init="init()">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h2 style="font-size:18px;font-weight:700">Scheduler</h2>
+      <button class="btn btn-blue" @click="showForm=true;editJob=null;resetForm()">+ Nouveau job</button>
+    </div>
+
+    <!-- Job list table -->
+    <div class="card">
+      <table class="tbl">
+        <thead>
+          <tr>
+            <th>Nom</th><th>Prochain d&#233;clenchement</th><th>Canaux</th>
+            <th>Dernier statut</th><th>Actif</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <template x-for="job in jobs" :key="job.id">
+            <tr>
+              <td x-text="job.name"></td>
+              <td x-text="job.next_run_time ? relativeTime(job.next_run_time) : '\u2014'" class="mono"></td>
+              <td><span x-text="(job.channels||[]).join(', ')" class="badge badge-blue"></span></td>
+              <td>
+                <span :class="{'badge-green':job.last_status==='ok','badge-red':job.last_status==='error','badge-yellow':job.last_status==='timeout','badge-muted':!job.last_status}" class="badge" x-text="job.last_status||'jamais'"></span>
+              </td>
+              <td>
+                <input type="checkbox" :checked="job.enabled" @change="toggleJob(job, $event.target.checked)">
+              </td>
+              <td style="white-space:nowrap">
+                <button class="btn btn-muted btn-sm" @click="openEdit(job)">Modifier</button>
+                <button class="btn btn-blue btn-sm" @click="runNow(job)" :disabled="job.last_status==='running'">\u25b6 Lancer</button>
+                <button class="btn btn-muted btn-sm" @click="openHistory(job)">Historique</button>
+                <button class="btn btn-red btn-sm" @click="deleteJob(job)" x-show="!job.system">Supprimer</button>
+              </td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Create/Edit form panel -->
+    <div x-show="showForm" class="card" style="margin-top:12px">
+      <h3 x-text="editJob ? 'Modifier le job' : 'Nouveau job'"></h3>
+      <div class="form-row">
+        <label>Nom</label>
+        <input type="text" x-model="form.name" style="flex:1">
+      </div>
+      <div class="form-row">
+        <label>Cron</label>
+        <input type="text" x-model="form.cron" placeholder="0 8 * * *" style="flex:1">
+        <span x-text="nextRunHint" class="mono" style="color:var(--muted);font-size:11px"></span>
+      </div>
+      <div class="form-row">
+        <label>Timeout (s)</label>
+        <input type="number" x-model.number="form.timeout_s" min="10" max="300" style="width:80px">
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="display:block;margin-bottom:4px;color:var(--muted);font-size:12px">SECTIONS</label>
+        <template x-for="sec in allSections" :key="sec.key">
+          <label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px">
+            <input type="checkbox" :value="sec.key" x-model="form.sections"> <span x-text="sec.label"></span>
+          </label>
+        </template>
+      </div>
+      <div style="margin-bottom:8px">
+        <label style="display:block;margin-bottom:4px;color:var(--muted);font-size:12px">CANAUX</label>
+        <template x-for="ch in allChannels" :key="ch">
+          <label style="display:inline-flex;align-items:center;gap:4px;margin-right:12px">
+            <input type="checkbox" :value="ch" x-model="form.channels"> <span x-text="ch"></span>
+          </label>
+        </template>
+      </div>
+      <div x-show="form.sections.includes('custom')" style="margin-bottom:8px">
+        <label style="display:block;margin-bottom:4px;color:var(--muted);font-size:12px">PROMPT PERSONNALIS&#201;</label>
+        <textarea x-model="form.prompt" rows="3" placeholder="Variables: {{date}} {{time}} {{hostname}} {{job_name}}"></textarea>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-blue" @click="saveJob()">Sauvegarder</button>
+        <button class="btn btn-green" @click="testJob()" x-show="editJob">Tester maintenant</button>
+        <button class="btn btn-muted" @click="showForm=false">Annuler</button>
+      </div>
+      <div x-show="testOutput" class="card" style="margin-top:8px;background:var(--input-bg)">
+        <pre x-text="testOutput" style="white-space:pre-wrap;font-size:12px"></pre>
+      </div>
+    </div>
+
+    <!-- History panel -->
+    <div x-show="historyJob" class="card" style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <h3>Historique &mdash; <span x-text="historyJob?.name"></span></h3>
+        <button class="btn btn-muted btn-sm" @click="historyJob=null">&#10005; Fermer</button>
+      </div>
+      <table class="tbl">
+        <thead><tr><th>Date</th><th>Dur&#233;e</th><th>Statut</th><th>Canaux</th><th>Aper&#231;u</th></tr></thead>
+        <tbody>
+          <template x-for="run in history" :key="run.id">
+            <tr>
+              <td x-text="run.started_at" class="mono"></td>
+              <td x-text="run.duration_ms ? run.duration_ms+'ms' : '\u2014'"></td>
+              <td><span :class="{'badge-green':run.status==='ok','badge-red':run.status==='error','badge-yellow':run.status==='timeout'}" class="badge" x-text="run.status"></span></td>
+              <td x-text="run.channels_ok ? JSON.stringify(JSON.parse(run.channels_ok)) : '\u2014'" class="mono" style="font-size:11px"></td>
+              <td x-text="run.output ? run.output.slice(0,150)+'\u2026' : '\u2014'" style="font-size:12px"></td>
+            </tr>
+          </template>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+"""
+
+# ---------------------------------------------------------------------------
 # JavaScript
 # ---------------------------------------------------------------------------
 ADMIN_JS = r"""
@@ -1003,7 +1120,8 @@ function adminApp(){return{
     {id:'channels',label:'Channels'},{id:'shell',label:'Shell'},
     {id:'config',label:'Config'},{id:'trust',label:'Trust'},
     {id:'costs',label:'Costs'},{id:'workflows',label:'Workflows'},
-    {id:'agents',label:'Agents'},{id:'advanced',label:'Advanced'}
+    {id:'agents',label:'Agents'},{id:'advanced',label:'Advanced'},
+    {id:'scheduler',label:'Scheduler'}
   ],
   tab:location.hash.slice(1)||'analytics',
   token:localStorage.getItem('bt')||'',
@@ -1317,6 +1435,88 @@ function adminApp(){return{
     try{const[s,h]=await Promise.all([this.api('/agent/status'),this.api('/agent/history')]);
       this.agentList=s.agents||[];this.agentHistory=h.executions||[]}catch(e){console.error('loadAgents:',e)}}
 }}
+
+function schedulerSection(){
+  return{
+    jobs:[],showForm:false,editJob:null,historyJob:null,history:[],
+    testOutput:'',
+    form:{name:'',cron:'0 8 * * *',sections:[],channels:[],prompt:'',timeout_s:60},
+    allSections:[
+      {key:'system_health',label:'Sant\u00e9 syst\u00e8me'},
+      {key:'personal_notes',label:'Notes r\u00e9centes'},
+      {key:'topics',label:'Sujets (\u26a0 co\u00fbt LLM)'},
+      {key:'reminders',label:'Rappels'},
+      {key:'weekly_summary',label:'Bilan hebdo'},
+      {key:'custom',label:'Prompt personnalis\u00e9'},
+    ],
+    allChannels:['ntfy','telegram','discord','whatsapp'],
+    get nextRunHint(){
+      try{return this.form.cron?'cron: '+this.form.cron:'';}catch(e){return '';}
+    },
+    async init(){await this.loadJobs();},
+    async loadJobs(){
+      const r=await fetch('/api/scheduler/jobs');
+      if(r.ok)this.jobs=await r.json();
+    },
+    resetForm(){
+      this.form={name:'',cron:'0 8 * * *',sections:[],channels:[],prompt:'',timeout_s:60};
+      this.testOutput='';
+    },
+    openEdit(job){
+      this.editJob=job;
+      this.form={name:job.name,cron:job.cron,sections:[...job.sections],
+                 channels:[...job.channels],prompt:job.prompt||'',timeout_s:job.timeout_s};
+      this.showForm=true;
+    },
+    async saveJob(){
+      const url=this.editJob?'/api/scheduler/jobs/'+this.editJob.id:'/api/scheduler/jobs';
+      const method=this.editJob?'PUT':'POST';
+      const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},
+                               body:JSON.stringify(this.form)});
+      if(r.ok){this.showForm=false;await this.loadJobs();}
+      else{const e=await r.json();alert(e.detail||'Erreur');}
+    },
+    async testJob(){
+      this.testOutput='Ex\u00e9cution en cours\u2026';
+      const r=await fetch('/api/scheduler/jobs/'+this.editJob.id+'/run',{method:'POST'});
+      if(r.ok){
+        this.testOutput='Job d\u00e9clench\u00e9. R\u00e9sultat visible dans l\'historique dans quelques secondes.';
+        setTimeout(()=>this.loadJobs(),3000);
+      }else{
+        const e=await r.json();
+        this.testOutput='Erreur: '+(e.detail||JSON.stringify(e));
+      }
+    },
+    async runNow(job){
+      const r=await fetch('/api/scheduler/jobs/'+job.id+'/run',{method:'POST'});
+      if(r.ok){job.last_status='running';}
+      else{const e=await r.json();alert(e.detail||'Erreur');}
+    },
+    async toggleJob(job,enabled){
+      await fetch('/api/scheduler/jobs/'+job.id+'/toggle?enabled='+enabled,{method:'POST'});
+      await this.loadJobs();
+    },
+    async deleteJob(job){
+      if(!confirm('Supprimer "'+job.name+'" ?'))return;
+      const r=await fetch('/api/scheduler/jobs/'+job.id,{method:'DELETE'});
+      if(r.ok)await this.loadJobs();
+      else{const e=await r.json();alert(e.detail||'Erreur');}
+    },
+    async openHistory(job){
+      this.historyJob=job;
+      const r=await fetch('/api/scheduler/jobs/'+job.id+'/history');
+      if(r.ok)this.history=await r.json();
+    },
+    relativeTime(iso){
+      const diff=new Date(iso)-new Date();
+      const abs=Math.abs(diff);
+      if(abs<60000)return'maintenant';
+      if(abs<3600000)return'dans '+Math.round(abs/60000)+'min';
+      if(abs<86400000)return'dans '+Math.round(abs/3600000)+'h';
+      return'dans '+Math.round(abs/86400000)+'j';
+    },
+  };
+}
 """
 
 # ---------------------------------------------------------------------------
@@ -1349,6 +1549,7 @@ def build_admin_html() -> str:
 {SECTION_WORKFLOWS}
 {SECTION_AGENTS}
 {SECTION_ADVANCED}
+{SECTION_SCHEDULER}
 </main>
 <script>{ADMIN_JS}</script>
 </body></html>"""

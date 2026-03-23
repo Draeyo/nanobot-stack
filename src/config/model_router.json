@@ -232,6 +232,7 @@
   "task_routes": {
     "router_decision": ["router_fast", "classifier_backup", "local_fast"],
     "classify_query": ["router_fast", "classifier_backup", "local_fast"],
+    "briefing": ["router_fast", "classifier_backup", "local_fast"],
     "query_rewrite": ["cheap_rewrite", "cheap_rewrite_backup", "local_fast"],
     "search_synthesis": ["cheap_rewrite", "cheap_rewrite_backup", "local_fast"],
     "remember_extract": ["json_extract_primary", "json_extract_backup", "local_fast"],
