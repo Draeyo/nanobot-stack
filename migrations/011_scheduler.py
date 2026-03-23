@@ -18,10 +18,11 @@ def check(ctx: dict) -> bool:
         return False
     db = sqlite3.connect(str(db_path))
     try:
-        tables = db.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name='scheduled_jobs'"
-        ).fetchall()
-        return len(tables) > 0
+        tables = {row[0] for row in db.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' "
+            "AND name IN ('scheduled_jobs','job_runs')"
+        ).fetchall()}
+        return tables == {"scheduled_jobs", "job_runs"}
     finally:
         db.close()
 
