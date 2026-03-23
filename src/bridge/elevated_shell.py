@@ -281,7 +281,9 @@ def execute_approved(action_id: str) -> dict[str, Any]:
     except subprocess.TimeoutExpired:
         exec_result = {"ok": False, "error": f"timeout after {ELEVATED_TIMEOUT}s"}
     except Exception:
-        logger.exception("Unexpected error while executing elevated action %s: %r", action_id, command)
+        # Log full exception details server-side, but return only a generic error to the client.
+        logger.exception("Unexpected error while executing elevated command '%s'", command)
+        exec_result = {"ok": False, "error": "internal error during command execution"}
         exec_result = {
             "ok": False,
             "error": "unexpected error while executing command",
