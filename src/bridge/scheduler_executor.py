@@ -35,7 +35,8 @@ class JobExecutor:
     # Template helpers
     # ------------------------------------------------------------------
 
-    def _resolve_template(self, template: str, job_name: str = "") -> str:
+    def _resolve_template(self, template: str, job_name: str = "",
+                           last_run: str | None = None) -> str:
         now = datetime.now(timezone.utc)
         return (
             template
@@ -44,7 +45,7 @@ class JobExecutor:
             .replace("{{day}}", now.strftime("%A"))
             .replace("{{hostname}}", socket.gethostname())
             .replace("{{job_name}}", job_name)
-            .replace("{{last_run}}", "N/A")
+            .replace("{{last_run}}", last_run or "N/A")
         )
 
     def _notes_window_hours(self, cron: str, last_run: str | None) -> int:
@@ -183,7 +184,10 @@ class JobExecutor:
             elif sec == "weekly_summary":
                 tasks[sec] = self._collect_weekly_summary()
             elif sec == "topics":
-                tasks[sec] = self._collect_topics()
+                if self._is_high_frequency(cron):
+                    logger.warning("Section 'topics' skipped for high-frequency job (cron=%s)", cron)
+                else:
+                    tasks[sec] = self._collect_topics()
 
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         section_data = dict(zip(tasks.keys(), results))
@@ -191,11 +195,11 @@ class JobExecutor:
         parts = []
         for sec, data in section_data.items():
             label = SECTION_LABELS.get(sec, sec)
-            content = str(data) if not isinstance(data, Exception) else f"Erreur: {data}"
+            content = data if isinstance(data, str) else f"Erreur: {data}"
             parts.append(f"## {label}\n{content}")
 
         if "custom" in sections and prompt:
-            resolved = self._resolve_template(prompt, job_name=job_name)
+            resolved = self._resolve_template(prompt, job_name=job_name, last_run=last_run)
             parts.append(f"## Note\n{resolved}")
 
         return "\n\n".join(parts)
