@@ -92,8 +92,9 @@ def run_shell_command(command: str) -> dict[str, Any]:
         }
     except subprocess.TimeoutExpired:
         return {"ok": False, "command": command, "error": f"timeout after {SHELL_TIMEOUT}s"}
-    except Exception as e:
-        return {"ok": False, "command": command, "error": str(e)}
+    except Exception:
+        logger.exception("Unexpected error while running shell command")
+        return {"ok": False, "command": command, "error": "unexpected error running command"}
 
 
 async def web_fetch(url: str) -> dict[str, Any]:
