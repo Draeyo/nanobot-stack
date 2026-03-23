@@ -250,3 +250,37 @@ class TestJobExecutorRun:
         channels_ok = json.loads(run[0])
         assert channels_ok["ntfy"] is True
         assert channels_ok["telegram"] is False
+
+
+class TestJobRegistry:
+    def test_seeds_three_system_jobs(self, tmp_db):
+        from scheduler_registry import JobRegistry
+        mgr_mock = MagicMock()
+        mgr_mock._db_path = str(tmp_db)
+        mgr_mock.list_jobs.return_value = []
+
+        registry = JobRegistry(mgr_mock)
+        registry.seed()
+
+        assert mgr_mock.create_job.call_count == 3
+
+    def test_does_not_seed_if_system_jobs_exist(self, tmp_db):
+        from scheduler_registry import JobRegistry
+        mgr_mock = MagicMock()
+        mgr_mock.list_jobs.return_value = [{"id": "sys-1", "system": 1}]
+
+        registry = JobRegistry(mgr_mock)
+        registry.seed()
+
+        mgr_mock.create_job.assert_not_called()
+
+    def test_seeds_even_if_custom_jobs_exist(self, tmp_db):
+        """If only custom (non-system) jobs exist, system jobs should still be seeded."""
+        from scheduler_registry import JobRegistry
+        mgr_mock = MagicMock()
+        mgr_mock.list_jobs.return_value = [{"id": "custom-1", "system": 0}]
+
+        registry = JobRegistry(mgr_mock)
+        registry.seed()
+
+        assert mgr_mock.create_job.call_count == 3
