@@ -543,8 +543,8 @@ nanobot-stack/
 ├── update.sh                  # Fast updater
 ├── rotate-secrets.sh          # Secret rotation
 ├── src/
-│   ├── bridge/                # RAG bridge (16 Python modules)
-│   ├── mcp/                   # MCP server (22 tools for the agent)
+│   ├── bridge/                # RAG bridge (18 Python modules)
+│   ├── mcp/                   # MCP server (19 tools for the agent)
 │   └── config/                # Default configs
 ├── systemd/                   # Service definitions (.template)
 ├── traefik/                   # Reverse proxy config (.template)

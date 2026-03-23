@@ -87,15 +87,13 @@ async def classify_query(query: str) -> str:
 # ====================== CONVERSATION HOOK ======================
 
 @mcp.tool()
-async def conversation_hook(conversation: list[dict[str, str]], extract_facts: bool = True, do_update_profile: bool = True, summarize: bool = True) -> str:
+async def conversation_hook(messages: list[dict[str, str]], session_id: str = "", auto_remember: bool = True) -> str:
     """Post-conversation pipeline: extracts durable facts, updates user profile, stores conversation summary."""
     return json.dumps(
         await _post("/conversation-hook", {
-            "conversation": conversation,
-            "extract_facts": extract_facts,
-            "update_profile": do_update_profile,
-            "summarize": summarize,
-            "store_summary": True,
+            "messages": messages,
+            "session_id": session_id,
+            "auto_remember": auto_remember,
         }),
         ensure_ascii=False,
     )
@@ -112,7 +110,7 @@ async def context_prefetch(query: str, limit: int = 5, inject_profile: bool = Tr
 @mcp.tool()
 async def compact_memories(subject: str, collection: str = "memory_personal", max_memories: int = 20) -> str:
     """Merge redundant memories about a subject into one consolidated entry."""
-    return json.dumps(await _post("/compact-memories", {"subject": subject, "collection": collection, "max_memories": max_memories}), ensure_ascii=False)
+    return json.dumps(await _post("/compact-memories", {"subject": subject, "collection": collection, "limit": max_memories}), ensure_ascii=False)
 
 # ====================== PLAN & EXECUTE ======================
 
@@ -123,7 +121,7 @@ async def plan_task(query: str, context: str = "") -> str:
 
 @mcp.tool()
 async def execute_step(tool: str, step_input: dict[str, Any] | None = None) -> str:
-    """Execute a single step from a plan (search_memory, shell_command, web_fetch, llm_call, notify, done)."""
+    """Execute a single step from a plan (search_memory, run_command, web_fetch, generate_text, notify, remember)."""
     return json.dumps(await _post("/execute-step", {"tool": tool, "input": step_input or {}}), ensure_ascii=False)
 
 # ====================== TOOLS ======================
@@ -146,9 +144,9 @@ async def notify(message: str, title: str = "nanobot", level: str = "info") -> s
 # ====================== FEEDBACK ======================
 
 @mcp.tool()
-async def give_feedback(chunk_id: str, collection: str, positive: bool) -> str:
-    """Give positive or negative feedback on a search result to improve future ranking."""
-    return json.dumps(await _post("/feedback", {"chunk_id": chunk_id, "collection": collection, "positive": positive}), ensure_ascii=False)
+async def give_feedback(chunk_id: str, collection: str, query: str, signal: str = "positive") -> str:
+    """Give positive or negative feedback on a search result to improve future ranking. signal: 'positive' or 'negative'."""
+    return json.dumps(await _post("/feedback", {"chunk_id": chunk_id, "collection": collection, "query": query, "signal": signal}), ensure_ascii=False)
 
 # ====================== PROFILE ======================
 
@@ -159,8 +157,8 @@ async def get_profile() -> str:
 
 @mcp.tool()
 async def update_profile(updates: dict[str, Any]) -> str:
-    """Update user profile fields (preferred_language, response_style, topics_of_interest, etc.)."""
-    return json.dumps(await _post("/profile", {"updates": updates}), ensure_ascii=False)
+    """Update user profile fields (name, language, style, expertise, context, preferences)."""
+    return json.dumps(await _post("/profile", updates), ensure_ascii=False)
 
 if __name__ == "__main__":
     mcp.run()
