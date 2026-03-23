@@ -175,8 +175,14 @@ def context_prefetch(body: PrefetchIn, request: Request):
     from user_profile import load_profile
 
     def simple_search(query, collections, limit=5):
-        results = _search_fn(query=query, collections=collections, limit=limit)
-        return results.get("results", [])
+        """
+        Lightweight adapter around the main search function that only exposes
+        sanitized result items to context prefetch, avoiding any internal
+        diagnostic fields (for example, error messages from embedding attempts).
+        """
+        search_response = _search_fn(query=query, collections=collections, limit=limit)
+        # Only propagate the actual search hits; ignore any extra metadata.
+        return search_response.get("results", []) if isinstance(search_response, dict) else []
 
     profile = load_profile()
     context = build_context_prefetch(body.query, simple_search, profile)
