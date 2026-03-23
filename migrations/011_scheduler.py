@@ -12,7 +12,7 @@ logger = logging.getLogger("migration.v11")
 STATE_DIR = pathlib.Path(os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state"))
 
 
-def check(ctx: dict) -> bool:
+def check(_ctx: dict) -> bool:
     db_path = STATE_DIR / "scheduler.db"
     if not db_path.exists():
         return False
@@ -27,7 +27,7 @@ def check(ctx: dict) -> bool:
         db.close()
 
 
-def migrate(ctx: dict) -> None:
+def migrate(_ctx: dict) -> None:
     STATE_DIR.mkdir(parents=True, exist_ok=True)
     db_path = STATE_DIR / "scheduler.db"
     db = sqlite3.connect(str(db_path))

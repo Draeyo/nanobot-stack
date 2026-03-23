@@ -2,8 +2,7 @@
 from __future__ import annotations
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, call
-import pytest
+from unittest.mock import AsyncMock, MagicMock, patch
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "bridge"))
 
@@ -26,7 +25,7 @@ class TestBroadcastNotifierNtfy:
 
 
 class TestBroadcastNotifierChannels:
-    async def test_telegram_fans_out_to_approved_users(self, mock_dm_pairing, mock_channel_manager):
+    async def test_telegram_fans_out_to_approved_users(self, mock_dm_pairing, mock_channel_manager):  # pylint: disable=unused-argument
         from broadcast_notifier import BroadcastNotifier
         telegram_adapter = AsyncMock()
         telegram_adapter.send_message = AsyncMock(return_value={"ok": True})
@@ -39,7 +38,7 @@ class TestBroadcastNotifierChannels:
         telegram_adapter.send_message.assert_called_once_with("111", "Briefing!")
         assert result["telegram"] is True
 
-    async def test_one_channel_failure_does_not_block_others(self, mock_dm_pairing, mock_channel_manager):
+    async def test_one_channel_failure_does_not_block_others(self, mock_dm_pairing, mock_channel_manager):  # pylint: disable=unused-argument
         from broadcast_notifier import BroadcastNotifier
         failing_adapter = AsyncMock()
         failing_adapter.send_message = AsyncMock(side_effect=Exception("network error"))

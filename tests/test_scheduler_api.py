@@ -1,15 +1,13 @@
 """Tests for scheduler REST API."""
 from __future__ import annotations
-import json
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
-import pytest
+from unittest.mock import MagicMock
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src" / "bridge"))
 
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
+from fastapi.testclient import TestClient  # pylint: disable=wrong-import-position
+from fastapi import FastAPI  # pylint: disable=wrong-import-position
 
 
 def _make_app(mgr):

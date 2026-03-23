@@ -1,4 +1,5 @@
 """Tests for SchedulerManager (CRUD, startup cleanup)."""
+# pylint: disable=protected-access
 from __future__ import annotations
 import json
 import sqlite3
@@ -191,7 +192,6 @@ class TestSectionCollectors:
     async def test_topics_section_blocked_for_high_frequency_cron(self):
         """topics section should not be collected for cron < 6h interval."""
         from scheduler_executor import JobExecutor
-        from croniter import croniter
         executor = JobExecutor(db_path=":memory:", notifier=MagicMock(), qdrant=None)
         # Every 30 min = < 6h
         assert executor._is_high_frequency("*/30 * * * *") is True
@@ -264,7 +264,7 @@ class TestJobRegistry:
 
         assert mgr_mock.create_job.call_count == 3
 
-    def test_does_not_seed_if_system_jobs_exist(self, tmp_db):
+    def test_does_not_seed_if_system_jobs_exist(self):
         from scheduler_registry import JobRegistry
         mgr_mock = MagicMock()
         mgr_mock.list_jobs.return_value = [{"id": "sys-1", "system": 1}]
@@ -274,7 +274,7 @@ class TestJobRegistry:
 
         mgr_mock.create_job.assert_not_called()
 
-    def test_seeds_even_if_custom_jobs_exist(self, tmp_db):
+    def test_seeds_even_if_custom_jobs_exist(self):
         """If only custom (non-system) jobs exist, system jobs should still be seeded."""
         from scheduler_registry import JobRegistry
         mgr_mock = MagicMock()
