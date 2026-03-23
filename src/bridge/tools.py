@@ -68,13 +68,14 @@ def validate_shell_command(cmd: str) -> tuple[bool, str]:
     if allowed is True:
         return True, "allowed"
 
-    # Check subcommand
+    # Check all arguments against the allow-list
     if isinstance(allowed, list):
-        if len(parts) > 1 and parts[1] in allowed:
-            return True, "allowed"
         if len(parts) == 1:
             return True, "allowed (no subcommand)"
-        return False, f"subcommand '{parts[1]}' not allowed for '{binary}'"
+        for arg in parts[1:]:
+            if arg not in allowed:
+                return False, f"argument '{arg}' not allowed for '{binary}'"
+        return True, "allowed"
 
     return False, "unknown allow-list format"
 
