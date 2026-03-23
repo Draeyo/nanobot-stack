@@ -93,7 +93,7 @@ class JobExecutor:
                 ["uptime"],
             ]:
                 try:
-                    r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                    r = await asyncio.to_thread(subprocess.run, cmd, capture_output=True, text=True, timeout=5)
                     lines.append(r.stdout.strip())
                 except Exception:
                     pass
@@ -235,7 +235,12 @@ class JobExecutor:
         started_at = datetime.now(timezone.utc).isoformat()
 
         self._update_job_status(job_id, "running", None, None)
-        self._insert_run(run_id, job_id, started_at, "running", None, None, None)
+        try:
+            self._insert_run(run_id, job_id, started_at, "running", None, None, None)
+        except Exception:
+            logger.exception("Failed to insert job run record for job %s", job_id)
+            self._update_job_status(job_id, "error", started_at, None)
+            return
 
         output = None
         error = None
