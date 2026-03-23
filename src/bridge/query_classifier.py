@@ -70,4 +70,4 @@ def classify_query(query: str, run_chat_fn) -> dict[str, Any]:
         return {"task_type": task_type, "needs_retrieval": needs, "confidence": conf, "raw_category": raw, "classifier_used": True, "classifier_attempts": result.get("attempts", [])}
     except Exception as exc:
         logger.warning("Classification failed: %s", exc)
-        return {"task_type": "fallback_general", "needs_retrieval": True, "confidence": 0.0, "raw_category": "error", "classifier_used": False, "error": str(exc)}
+        return {"task_type": "fallback_general", "needs_retrieval": True, "confidence": 0.0, "raw_category": "error", "classifier_used": False, "error": "classification failed"}

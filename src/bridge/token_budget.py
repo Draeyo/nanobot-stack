@@ -318,3 +318,46 @@ def reset_daily_budget() -> None:
             db.close()
 
     logger.info("Daily budget reset for period %s", period)
+
+
+# ---------------------------------------------------------------------------
+# FastAPI router
+# ---------------------------------------------------------------------------
+from fastapi import APIRouter, Request
+
+router = APIRouter(prefix="/budget", tags=["token-budget"])
+_verify_token = None
+
+
+def init_budget(verify_token_dep=None):
+    global _verify_token
+    _verify_token = verify_token_dep
+
+
+@router.get("/status")
+def budget_status_endpoint(request: Request):
+    if _verify_token:
+        _verify_token(request)
+    return check_budget()
+
+
+@router.get("/daily-report")
+def daily_report_endpoint(request: Request):
+    if _verify_token:
+        _verify_token(request)
+    return get_daily_report()
+
+
+@router.get("/history")
+def usage_history_endpoint(request: Request, days: int = 7):
+    if _verify_token:
+        _verify_token(request)
+    return get_usage_history(days)
+
+
+@router.post("/reset")
+def reset_budget_endpoint(request: Request):
+    if _verify_token:
+        _verify_token(request)
+    reset_daily_budget()
+    return {"ok": True, "period": _today()}

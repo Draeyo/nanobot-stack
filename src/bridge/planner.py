@@ -66,7 +66,7 @@ def create_plan(query: str, run_chat_fn, context: str = "") -> dict[str, Any]:
         return {"plan": plan, "attempts": result.get("attempts", [])}
     except Exception as exc:
         logger.warning("Planning failed: %s", exc)
-        return {"plan": None, "error": str(exc)}
+        return {"plan": None, "error": "planning failed"}
 
 
 def execute_step(step: dict[str, Any], step_results: dict[int, Any],
@@ -136,7 +136,7 @@ def execute_step(step: dict[str, Any], step_results: dict[int, Any],
 
     except Exception as exc:
         logger.warning("Step execution failed (%s): %s", action, exc)
-        result_dict = {"status": "error", "action": action, "error": str(exc)}
+        result_dict = {"status": "error", "action": action, "error": "step execution failed"}
         # Log to procedural memory even on failure
         if _procedural_memory:
             try:
@@ -232,7 +232,7 @@ def execute_plan_parallel(plan: dict[str, Any], run_chat_fn, **tool_fns) -> dict
                     try:
                         output = future.result()
                     except Exception as exc:
-                        output = {"status": "error", "action": step.get("action"), "error": str(exc)}
+                        output = {"status": "error", "action": step.get("action"), "error": "parallel step failed"}
                     results[step["id"]] = output.get("result", output.get("error", ""))
                     step_outputs.append({"step": step, "output": output})
                     completed.add(step["id"])

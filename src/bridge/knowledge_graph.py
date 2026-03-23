@@ -106,7 +106,7 @@ def extract_and_store(text: str, run_chat_fn) -> dict[str, Any]:
         data = json.loads(result.get("text", "{}"))
     except Exception as exc:
         logger.warning("KG extraction failed: %s", exc)
-        return {"stored": False, "error": str(exc)}
+        return {"stored": False, "error": "extraction failed"}
 
     entities = data.get("entities", [])
     relations = data.get("relations", [])
@@ -376,6 +376,6 @@ def get_stats() -> dict[str, Any]:
                 "top_entities": [{"name": e[0], "type": e[1], "mentions": e[2]} for e in top_entities],
             }
         except Exception as exc:
-            return {"enabled": True, "error": str(exc)}
+            return {"enabled": True, "error": "stats query failed"}
         finally:
             db.close()

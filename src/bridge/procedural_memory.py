@@ -115,7 +115,6 @@ def log_action(session_id: str, action: str, params: dict, result_summary: str =
 
 def get_action_count_since_last_detect() -> int:
     """Return the number of new actions since the last detect_patterns run."""
-    global _last_detect_id  # noqa: PLW0602
     try:
         db = _conn()
         row = db.execute(
@@ -184,7 +183,7 @@ def detect_patterns(run_chat_fn: Callable[..., dict]) -> dict:
         data = json.loads(result["text"])
     except Exception as exc:
         logger.warning("Pattern detection LLM call failed: %s", exc)
-        return {"detected": 0, "new_patterns": [], "error": str(exc)}
+        return {"detected": 0, "new_patterns": [], "error": "pattern detection failed"}
 
     patterns = data.get("patterns", [])
     new_patterns: list[dict] = []
@@ -383,7 +382,7 @@ def execute_workflow(workflow_id: int, execute_step_fn: Callable[..., dict]) -> 
                 all_ok = False
         except Exception as exc:
             logger.warning("Workflow step '%s' failed: %s", action, exc)
-            step_results.append({"action": action, "error": str(exc), "success": False})
+            step_results.append({"action": action, "error": "step execution failed", "success": False})
             all_ok = False
 
     # Update success rate using exponential moving average

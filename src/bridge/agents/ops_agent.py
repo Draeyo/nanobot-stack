@@ -7,8 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-from typing import Any, Callable
+from typing import Any
 
 from .base import AgentBase, AgentResult
 
@@ -53,14 +52,6 @@ class OpsAgent(AgentBase):
     )
     tools: list[str] = ["run_command", "web_fetch", "notify", "search_memory"]
     max_steps: int = 8
-
-    def __init__(
-        self,
-        run_chat_fn: Callable[..., Any],
-        tool_registry: dict[str, Callable[..., Any]] | None = None,
-        trust_engine: Any = None,
-    ) -> None:
-        super().__init__(run_chat_fn, tool_registry, trust_engine)
 
     # ------------------------------------------------------------------
     # Public API

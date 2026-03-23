@@ -142,7 +142,7 @@ def auto_update_from_conversation(messages: list[dict[str, str]], run_chat_fn) -
         return {"updated": False}
     except Exception as exc:
         logger.debug("Auto profile update failed: %s", exc)
-        return {"updated": False, "error": str(exc)}
+        return {"updated": False, "error": "auto profile update failed"}
 
 
 def format_profile_block(profile: dict[str, Any]) -> str:
