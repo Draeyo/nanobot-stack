@@ -8,7 +8,6 @@ import json
 import logging
 import os
 import pathlib
-from collections import deque
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request

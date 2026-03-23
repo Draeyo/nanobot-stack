@@ -26,13 +26,37 @@ DEFAULT_PROFILE: dict[str, Any] = {
     "expertise": [],
     "context": "",
     "preferences": {},
+    "communication": {
+        "tone": "professional",
+        "verbosity": "concise",
+        "format_preference": "markdown",
+        "code_style": {},
+    },
+    "tool_preferences": {
+        "preferred_shell": "bash",
+        "default_search_collections": [],
+    },
+    "schedule": {
+        "timezone": "",
+        "working_hours": "",
+        "notification_preferences": {},
+    },
+    "learning_log": [],
     "updated_at": "",
 }
 
+LEARNING_LOG_MAX = 500
+
 PROFILE_UPDATE_PROMPT = """Given the user profile and conversation, identify any updates needed.
 Only update fields where the conversation reveals NEW or CHANGED information.
-Return ONLY JSON with the fields to update (omit unchanged fields):
-{"name": "...", "language": "...", "style": "...", "expertise": [...], "context": "...", "preferences": {...}}
+Return ONLY JSON with the fields to update (omit unchanged fields).
+
+Available fields:
+- name, language, style, expertise (list), context, preferences (dict)
+- communication: {tone, verbosity (concise|moderate|detailed), format_preference (markdown|plain|structured), code_style}
+- tool_preferences: {preferred_shell, default_search_collections}
+- schedule: {timezone, working_hours, notification_preferences}
+
 Return {} if no updates needed."""
 
 
@@ -69,12 +93,37 @@ def update_profile(updates: dict[str, Any]) -> dict[str, Any]:
     profile = load_profile()
     changed = False
     for key, value in updates.items():
+        if key == "learning_log":
+            continue  # learning_log is append-only via record_preference_signal
         if key in DEFAULT_PROFILE and value and value != profile.get(key):
-            profile[key] = value
+            if isinstance(profile.get(key), dict) and isinstance(value, dict):
+                # Deep merge for nested dicts (communication, tool_preferences, etc.)
+                profile[key] = {**profile.get(key, {}), **value}
+            else:
+                profile[key] = value
             changed = True
     if changed:
         save_profile(profile)
     return {"updated": changed, "profile": profile}
+
+
+def record_preference_signal(category: str, key: str, value: Any, confidence: float = 1.0) -> None:
+    """Record a preference change in the learning log (append-only, capped)."""
+    profile = load_profile()
+    log_entry = {
+        "category": category,
+        "key": key,
+        "value": value,
+        "confidence": confidence,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    learning_log = profile.get("learning_log", [])
+    learning_log.append(log_entry)
+    # Cap at LEARNING_LOG_MAX, keep most recent
+    if len(learning_log) > LEARNING_LOG_MAX:
+        learning_log = learning_log[-LEARNING_LOG_MAX:]
+    profile["learning_log"] = learning_log
+    save_profile(profile)
 
 
 def auto_update_from_conversation(messages: list[dict[str, str]], run_chat_fn) -> dict[str, Any]:
@@ -93,7 +142,7 @@ def auto_update_from_conversation(messages: list[dict[str, str]], run_chat_fn) -
         return {"updated": False}
     except Exception as exc:
         logger.debug("Auto profile update failed: %s", exc)
-        return {"updated": False, "error": str(exc)}
+        return {"updated": False, "error": "auto profile update failed"}
 
 
 def format_profile_block(profile: dict[str, Any]) -> str:
@@ -114,6 +163,16 @@ def format_profile_block(profile: dict[str, Any]) -> str:
     if profile.get("preferences"):
         for k, v in profile["preferences"].items():
             parts.append(f"{k}: {v}")
+    comm = profile.get("communication", {})
+    if comm.get("tone"):
+        parts.append(f"Tone: {comm['tone']}")
+    if comm.get("verbosity"):
+        parts.append(f"Verbosity: {comm['verbosity']}")
+    if comm.get("format_preference"):
+        parts.append(f"Format: {comm['format_preference']}")
+    sched = profile.get("schedule", {})
+    if sched.get("timezone"):
+        parts.append(f"Timezone: {sched['timezone']}")
     if not parts:
         return ""
     return "## User profile\n" + "\n".join(f"- {p}" for p in parts)

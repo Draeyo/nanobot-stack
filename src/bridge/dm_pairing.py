@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
+import pathlib
 import secrets
 import sqlite3
 import threading
@@ -27,8 +28,6 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 logger = logging.getLogger("rag-bridge.channels.pairing")
-
-import pathlib
 STATE_DIR = pathlib.Path(os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state"))
 DM_POLICY = os.getenv("CHANNEL_DM_POLICY", "pairing").lower()
 PAIRING_CODE_EXPIRY = int(os.getenv("PAIRING_CODE_EXPIRY", "30"))  # minutes

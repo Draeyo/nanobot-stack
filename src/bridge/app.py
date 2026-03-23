@@ -1,4 +1,4 @@
-"""nanobot RAG bridge v9 — FastAPI application.
+"""nanobot RAG bridge v10 — FastAPI application.
 
 v7: Reranker, hybrid search, metadata, circuit breaker, rate limiting, metrics, audit, cache.
 v8: Classification, smart-chat, planner, conversation hook, context compression, profile, feedback.
@@ -6,6 +6,9 @@ v9: HyDE query rewriting, citations, knowledge graph, working memory, code inter
     PII filtering, plugin system, file watcher, sentiment detection, self-critique,
     parallel planning, semantic chunking, per-user rate limiting, memory decay,
     episodic/semantic memory types, export, explain mode, Chart.js dashboard.
+v10: Trust engine, procedural memory, sub-agents (orchestrator + ops), semantic cache,
+     token budget, extended classifier (15 types), adaptive routing with budget pressure,
+     enriched knowledge graph, enriched user profile, local-first routing.
 """
 
 from __future__ import annotations
@@ -162,9 +165,7 @@ except Exception as exc:
 def _shutdown():
     token_tracker.flush()
     try:
-        from file_watcher import FileWatcher
-        # File watcher instance may have been stored on app state
-        watcher = getattr(app, "_file_watcher", None)
+        watcher = getattr(app.state, "file_watcher", None)
         if watcher:
             watcher.stop()
     except Exception:
@@ -202,8 +203,8 @@ _router_cache: dict[str, Any] = {"mtime": 0.0, "data": {}}
 def load_router() -> dict[str, Any]:
     try:
         mt = MODEL_ROUTER_FILE.stat().st_mtime
-    except FileNotFoundError:
-        raise RuntimeError(f"Model router file not found: {MODEL_ROUTER_FILE}")
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Model router file not found: {MODEL_ROUTER_FILE}") from exc
     if mt != _router_cache["mtime"]:
         _router_cache["data"] = json.loads(MODEL_ROUTER_FILE.read_text(encoding="utf-8"))
         _router_cache["mtime"] = mt
@@ -1226,10 +1227,10 @@ except Exception as exc:
 try:
     from file_watcher import FileWatcher, WATCHER_ENABLED
     if WATCHER_ENABLED:
-        _watcher_dirs = [d for d in COLLECTION_DIR_MAP.values()]
+        _watcher_dirs = list(COLLECTION_DIR_MAP.values())
         _file_watcher = FileWatcher(_watcher_dirs, _background_ingest)
         _file_watcher.start()
-        app._file_watcher = _file_watcher
+        app.state.file_watcher = _file_watcher
         logger.info("File watcher started for %d directories", len(_watcher_dirs))
 except Exception as exc:
     logger.info("File watcher not started: %s", exc)
@@ -1330,3 +1331,78 @@ try:
 except Exception as exc:
     logger.info("Admin UI not loaded: %s", exc)
 
+# ---------------------------------------------------------------------------
+# v10: Trust Engine
+# ---------------------------------------------------------------------------
+try:
+    from trust_engine import router as trust_router, init_trust, TRUST_ENGINE_ENABLED
+    if TRUST_ENGINE_ENABLED:
+        init_trust(verify_token_dep=verify_token)
+        app.include_router(trust_router, dependencies=[Depends(verify_token)])
+        # Wire into tools and elevated shell
+        import trust_engine  # pylint: disable=ungrouped-imports
+        from tools import set_trust_engine as set_tools_trust  # pylint: disable=ungrouped-imports
+        from elevated_shell import set_trust_engine as set_elevated_trust  # pylint: disable=ungrouped-imports
+        set_tools_trust(trust_engine)
+        set_elevated_trust(trust_engine)
+        logger.info("v10 trust engine loaded (/trust/*)")
+    else:
+        logger.info("Trust engine disabled (TRUST_ENGINE_ENABLED=false)")
+except Exception as exc:
+    logger.info("v10 trust engine not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# v10: Procedural Memory
+# ---------------------------------------------------------------------------
+try:
+    from procedural_memory import PROCEDURAL_MEMORY_ENABLED
+    if PROCEDURAL_MEMORY_ENABLED:
+        import procedural_memory
+        from planner import set_procedural_memory
+        set_procedural_memory(procedural_memory)
+        logger.info("v10 procedural memory loaded")
+    else:
+        logger.info("Procedural memory disabled (PROCEDURAL_MEMORY_ENABLED=false)")
+except Exception as exc:
+    logger.info("v10 procedural memory not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# v10: Semantic Cache
+# ---------------------------------------------------------------------------
+try:
+    from semantic_cache import SEMANTIC_CACHE_ENABLED, init_semantic_cache
+    if SEMANTIC_CACHE_ENABLED:
+        _sem_cache = init_semantic_cache(qdrant_client=qdrant, embed_fn=lambda t: embed_texts([t])[0][0])
+        logger.info("v10 semantic cache loaded")
+    else:
+        logger.info("Semantic cache disabled (SEMANTIC_CACHE_ENABLED=false)")
+except Exception as exc:
+    logger.info("v10 semantic cache not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# v10: Token Budget
+# ---------------------------------------------------------------------------
+try:
+    from token_budget import TOKEN_BUDGET_ENABLED
+    if TOKEN_BUDGET_ENABLED:
+        from token_budget import router as budget_router, init_budget
+        init_budget(verify_token_dep=verify_token)
+        app.include_router(budget_router, dependencies=[Depends(verify_token)])
+        logger.info("v10 token budget loaded (/budget/*)")
+    else:
+        logger.info("Token budget disabled (TOKEN_BUDGET_ENABLED=false)")
+except Exception as exc:
+    logger.info("v10 token budget not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# v10: Agent Orchestrator
+# ---------------------------------------------------------------------------
+try:
+    from agents import AGENT_REGISTRY
+    if os.getenv("AGENT_ORCHESTRATOR_ENABLED", "false").lower() == "true":
+        import agents.orchestrator  # pylint: disable=unused-import,import-outside-toplevel
+        logger.info("v10 agent orchestrator loaded (%d agents registered)", len(AGENT_REGISTRY))
+    else:
+        logger.info("Agent orchestrator disabled (AGENT_ORCHESTRATOR_ENABLED=false)")
+except Exception as exc:
+    logger.info("v10 agent orchestrator not loaded: %s", exc)

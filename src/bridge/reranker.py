@@ -51,7 +51,7 @@ def _load_model():
             return
         try:
             from sentence_transformers import CrossEncoder
-            import resource
+            import resource  # pylint: disable=import-error
             mem_before = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
             logger.info("Loading cross-encoder: %s (device=%s)", RERANKER_MODEL, RERANKER_DEVICE)
             _model = CrossEncoder(RERANKER_MODEL, device=RERANKER_DEVICE)

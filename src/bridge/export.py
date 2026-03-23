@@ -105,7 +105,7 @@ def generate_pdf_bytes(markdown_text: str, title: str = "Conversation") -> bytes
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.units import cm
         from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.styles import getSampleStyleSheet
     except ImportError:
         logger.debug("reportlab not installed, PDF export unavailable")
         return None

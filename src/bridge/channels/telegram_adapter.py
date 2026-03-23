@@ -51,7 +51,7 @@ class TelegramAdapter(ChannelAdapter):
     async def stop(self) -> None:
         self._running = False
 
-    async def send_message(self, chat_id: str, text: str) -> dict[str, Any]:
+    async def send_message(self, channel_id: str, text: str) -> dict[str, Any]:
         timeout = httpx.Timeout(30.0, connect=10.0)
         async with httpx.AsyncClient(timeout=timeout) as client:
             # Telegram limit: 4096 chars per message
@@ -59,7 +59,7 @@ class TelegramAdapter(ChannelAdapter):
             for chunk in chunks:
                 await client.post(
                     f"{TELEGRAM_API}{self._token}/sendMessage",
-                    json={"chat_id": chat_id, "text": chunk, "parse_mode": "Markdown"},
+                    json={"chat_id": channel_id, "text": chunk, "parse_mode": "Markdown"},
                 )
         return {"ok": True}
 
@@ -74,7 +74,7 @@ class TelegramAdapter(ChannelAdapter):
             self._offset = updates[-1]["update_id"] + 1
         return updates
 
-    async def _process_update(self, update: dict, client: httpx.AsyncClient) -> None:
+    async def _process_update(self, update: dict, client: httpx.AsyncClient) -> None:  # pylint: disable=unused-argument
         message = update.get("message", {})
         chat_id = str(message.get("chat", {}).get("id", ""))
         text = message.get("text", "")

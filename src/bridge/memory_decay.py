@@ -9,7 +9,7 @@ import logging
 import math
 import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
 
 logger = logging.getLogger("rag-bridge.memory_decay")

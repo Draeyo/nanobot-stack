@@ -9,8 +9,6 @@ from __future__ import annotations
 import logging
 import os
 import re
-from typing import Any
-
 logger = logging.getLogger("rag-bridge.semantic_chunker")
 
 SEMANTIC_CHUNKING_ENABLED = os.getenv("SEMANTIC_CHUNKING_ENABLED", "true").lower() == "true"

@@ -23,24 +23,34 @@ DB_PATH = STATE_DIR / "knowledge_graph.db"
 
 _lock = threading.Lock()
 
-EXTRACT_ENTITIES_PROMPT = """Extract entities and relationships from this text.
+ENTITY_TYPES = ["person", "project", "technology", "concept", "organization",
+                 "decision", "event", "deadline", "location", "tool", "workflow", "preference"]
+RELATION_TYPES = ["works_on", "decided", "uses", "depends_on", "related_to", "created",
+                  "manages", "scheduled_for", "blocked_by", "prefers", "replaced_by",
+                  "part_of", "owns"]
 
-Return ONLY JSON:
-{
-  "entities": [
-    {"name": "entity name", "type": "person|project|technology|concept|organization|decision", "description": "brief description"}
-  ],
-  "relations": [
-    {"source": "entity1", "relation": "works_on|decided|uses|depends_on|related_to|created|manages", "target": "entity2", "context": "brief context"}
-  ]
-}
+_ENTITY_TYPES_STR = "|".join(ENTITY_TYPES)
+_RELATION_TYPES_STR = "|".join(RELATION_TYPES)
 
-Only extract clear, factual relationships. Skip vague or uncertain ones.
-Text: {text}"""
+EXTRACT_ENTITIES_PROMPT = (
+    "Extract entities and relationships from this text.\n\n"
+    "Return ONLY JSON:\n"
+    "{\n"
+    '  "entities": [\n'
+    f'    {{"name": "entity name", "type": "{_ENTITY_TYPES_STR}", "description": "brief description"}}\n'
+    "  ],\n"
+    '  "relations": [\n'
+    f'    {{"source": "entity1", "relation": "{_RELATION_TYPES_STR}", "target": "entity2", "context": "brief context"}}\n'
+    "  ]\n"
+    "}\n\n"
+    "Only extract clear, factual relationships. Skip vague or uncertain ones.\n"
+    "Text: {text}"
+)
 
 
 def _get_conn() -> sqlite3.Connection:
     """Get a SQLite connection with schema initialization."""
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     db = sqlite3.connect(str(DB_PATH))
     db.execute("PRAGMA journal_mode=WAL")
     db.execute("""CREATE TABLE IF NOT EXISTS entities (
@@ -64,6 +74,26 @@ def _get_conn() -> sqlite3.Connection:
     db.execute("CREATE INDEX IF NOT EXISTS idx_relations_source ON relations(source)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_relations_target ON relations(target)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type)")
+    # v10 schema additions (safe: try/except for older SQLite)
+    for col, spec in [
+        ("updated_at", "TEXT DEFAULT ''"),
+        ("confidence", "REAL DEFAULT 1.0"),
+        ("source", "TEXT DEFAULT 'conversation'"),
+        ("aliases", "TEXT DEFAULT '[]'"),
+    ]:
+        try:
+            db.execute(f"ALTER TABLE entities ADD COLUMN {col} {spec}")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+    for col, spec in [
+        ("last_confirmed", "TEXT DEFAULT ''"),
+        ("source", "TEXT DEFAULT 'conversation'"),
+        ("confidence", "REAL DEFAULT 1.0"),
+    ]:
+        try:
+            db.execute(f"ALTER TABLE relations ADD COLUMN {col} {spec}")
+        except sqlite3.OperationalError:
+            pass
     return db
 
 
@@ -79,7 +109,7 @@ def extract_and_store(text: str, run_chat_fn) -> dict[str, Any]:
         data = json.loads(result.get("text", "{}"))
     except Exception as exc:
         logger.warning("KG extraction failed: %s", exc)
-        return {"stored": False, "error": str(exc)}
+        return {"stored": False, "error": "extraction failed"}
 
     entities = data.get("entities", [])
     relations = data.get("relations", [])
@@ -100,14 +130,17 @@ def extract_and_store(text: str, run_chat_fn) -> dict[str, Any]:
                 desc = ent.get("description", "")
                 if not name:
                     continue
-                db.execute("""INSERT INTO entities (name, type, description, mention_count, first_seen, last_seen)
-                              VALUES (?, ?, ?, 1, ?, ?)
+                if etype not in ENTITY_TYPES:
+                    etype = "concept"
+                db.execute("""INSERT INTO entities (name, type, description, mention_count, first_seen, last_seen, updated_at)
+                              VALUES (?, ?, ?, 1, ?, ?, ?)
                               ON CONFLICT(name) DO UPDATE SET
                                 mention_count = mention_count + 1,
                                 last_seen = ?,
+                                updated_at = ?,
                                 description = CASE WHEN length(excluded.description) > length(entities.description)
                                               THEN excluded.description ELSE entities.description END""",
-                           (name, etype, desc, now, now, now))
+                           (name, etype, desc, now, now, now, now, now))
                 stored_entities += 1
 
             for rel in relations:
@@ -117,13 +150,16 @@ def extract_and_store(text: str, run_chat_fn) -> dict[str, Any]:
                 ctx = rel.get("context", "")
                 if not src or not tgt:
                     continue
-                db.execute("""INSERT INTO relations (source, relation, target, context, strength, created_at)
-                              VALUES (?, ?, ?, ?, 1.0, ?)
+                if rtype not in RELATION_TYPES:
+                    rtype = "related_to"
+                db.execute("""INSERT INTO relations (source, relation, target, context, strength, created_at, last_confirmed)
+                              VALUES (?, ?, ?, ?, 1.0, ?, ?)
                               ON CONFLICT(source, relation, target) DO UPDATE SET
                                 strength = strength + 0.5,
+                                last_confirmed = ?,
                                 context = CASE WHEN length(excluded.context) > length(relations.context)
                                           THEN excluded.context ELSE relations.context END""",
-                           (src, rtype, tgt, ctx, now))
+                           (src, rtype, tgt, ctx, now, now, now))
                 stored_relations += 1
 
             db.commit()
@@ -133,7 +169,7 @@ def extract_and_store(text: str, run_chat_fn) -> dict[str, Any]:
     return {"stored": True, "entities": stored_entities, "relations": stored_relations}
 
 
-def query_entity(name: str, depth: int = 1) -> dict[str, Any]:
+def query_entity(name: str, depth: int = 1) -> dict[str, Any]:  # pylint: disable=unused-argument
     """Query the graph for an entity and its relationships."""
     if not KG_ENABLED:
         return {"found": False, "reason": "knowledge graph disabled"}
@@ -204,6 +240,124 @@ def query_relations(entity1: str, entity2: str) -> dict[str, Any]:
             db.close()
 
 
+def merge_entity(name1: str, name2: str) -> dict[str, Any]:
+    """Merge two entities into one, combining mentions and relations."""
+    if not KG_ENABLED:
+        return {"merged": False, "reason": "knowledge graph disabled"}
+    n1, n2 = name1.strip().lower(), name2.strip().lower()
+    with _lock:
+        db = _get_conn()
+        try:
+            e1 = db.execute("SELECT * FROM entities WHERE name = ?", (n1,)).fetchone()
+            e2 = db.execute("SELECT * FROM entities WHERE name = ?", (n2,)).fetchone()
+            if not e1 or not e2:
+                return {"merged": False, "reason": "one or both entities not found"}
+            # Keep e1, merge e2 into it
+            db.execute("UPDATE entities SET mention_count = mention_count + ?, last_seen = ? WHERE name = ?",
+                       (e2[3], datetime.now(timezone.utc).isoformat(), n1))
+            # Update aliases
+            try:
+                aliases = json.loads(e1[6] if len(e1) > 6 and e1[6] else "[]")
+            except (json.JSONDecodeError, IndexError):
+                aliases = []
+            if n2 not in aliases:
+                aliases.append(n2)
+            db.execute("UPDATE entities SET aliases = ? WHERE name = ?", (json.dumps(aliases), n1))
+            # Redirect relations
+            db.execute("UPDATE OR IGNORE relations SET source = ? WHERE source = ?", (n1, n2))
+            db.execute("UPDATE OR IGNORE relations SET target = ? WHERE target = ?", (n1, n2))
+            db.execute("DELETE FROM relations WHERE source = ? OR target = ?", (n2, n2))
+            db.execute("DELETE FROM entities WHERE name = ?", (n2,))
+            db.commit()
+            return {"merged": True, "kept": n1, "removed": n2}
+        finally:
+            db.close()
+
+
+def query_by_type(entity_type: str, limit: int = 50) -> list[dict[str, Any]]:
+    """Get all entities of a given type."""
+    if not KG_ENABLED:
+        return []
+    with _lock:
+        db = _get_conn()
+        try:
+            rows = db.execute(
+                "SELECT name, type, description, mention_count, first_seen, last_seen FROM entities WHERE type = ? ORDER BY mention_count DESC LIMIT ?",
+                (entity_type, limit)
+            ).fetchall()
+            return [{"name": r[0], "type": r[1], "description": r[2], "mention_count": r[3], "first_seen": r[4], "last_seen": r[5]} for r in rows]
+        finally:
+            db.close()
+
+
+def temporal_query(entity: str, start_date: str = "", end_date: str = "") -> dict[str, Any]:
+    """Find relations involving an entity within a time period."""
+    if not KG_ENABLED:
+        return {"found": False}
+    name = entity.strip().lower()
+    with _lock:
+        db = _get_conn()
+        try:
+            query = """SELECT source, relation, target, context, strength, created_at FROM relations
+                       WHERE (source LIKE ? OR target LIKE ?)"""
+            params: list[Any] = [f"%{name}%", f"%{name}%"]
+            if start_date:
+                query += " AND created_at >= ?"
+                params.append(start_date)
+            if end_date:
+                query += " AND created_at <= ?"
+                params.append(end_date)
+            query += " ORDER BY created_at DESC LIMIT 50"
+            rows = db.execute(query, params).fetchall()
+            return {
+                "found": len(rows) > 0,
+                "relations": [{"source": r[0], "relation": r[1], "target": r[2], "context": r[3], "strength": r[4], "created_at": r[5]} for r in rows],
+            }
+        finally:
+            db.close()
+
+
+def get_subgraph(entity: str, depth: int = 2) -> dict[str, Any]:
+    """Multi-hop graph traversal from an entity."""
+    if not KG_ENABLED:
+        return {"entities": [], "relations": []}
+    name = entity.strip().lower()
+    visited: set[str] = set()
+    all_entities: list[dict[str, Any]] = []
+    all_relations: list[dict[str, Any]] = []
+    frontier = {name}
+
+    with _lock:
+        db = _get_conn()
+        try:
+            for _ in range(depth):
+                if not frontier:
+                    break
+                next_frontier: set[str] = set()
+                for node in frontier:
+                    if node in visited:
+                        continue
+                    visited.add(node)
+                    ent = db.execute("SELECT name, type, description, mention_count FROM entities WHERE name = ?", (node,)).fetchone()
+                    if ent:
+                        all_entities.append({"name": ent[0], "type": ent[1], "description": ent[2], "mention_count": ent[3]})
+                    rels = db.execute(
+                        "SELECT source, relation, target, context, strength FROM relations WHERE source = ? OR target = ?",
+                        (node, node)
+                    ).fetchall()
+                    for r in rels:
+                        rel_dict = {"source": r[0], "relation": r[1], "target": r[2], "context": r[3], "strength": r[4]}
+                        if rel_dict not in all_relations:
+                            all_relations.append(rel_dict)
+                        neighbor = r[2] if r[0] == node else r[0]
+                        if neighbor not in visited:
+                            next_frontier.add(neighbor)
+                frontier = next_frontier
+            return {"entities": all_entities, "relations": all_relations}
+        finally:
+            db.close()
+
+
 def get_stats() -> dict[str, Any]:
     """Return knowledge graph statistics."""
     if not KG_ENABLED:
@@ -224,7 +378,7 @@ def get_stats() -> dict[str, Any]:
                 "entity_types": type_counts,
                 "top_entities": [{"name": e[0], "type": e[1], "mentions": e[2]} for e in top_entities],
             }
-        except Exception as exc:
-            return {"enabled": True, "error": str(exc)}
+        except Exception:
+            return {"enabled": True, "error": "stats query failed"}
         finally:
             db.close()

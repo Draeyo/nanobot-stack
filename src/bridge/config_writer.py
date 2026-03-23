@@ -65,7 +65,7 @@ def validate_json_content(content: str) -> list[str]:
         data = json.loads(content)
         if not isinstance(data, dict):
             errors.append("Root element must be a JSON object")
-        elif "model_router.json" and ("profiles" not in data or "task_routes" not in data):
+        elif "profiles" not in data or "task_routes" not in data:
             errors.append("model_router.json must have 'profiles' and 'task_routes' keys")
     except json.JSONDecodeError as e:
         errors.append(f"JSON syntax error: {e}")

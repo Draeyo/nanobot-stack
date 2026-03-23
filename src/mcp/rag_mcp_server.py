@@ -107,7 +107,11 @@ async def rewrite_query(query: str, mode: str = "hyde") -> str:
 @mcp.tool()
 async def conversation_hook(conversation: list[dict[str, str]], extract_facts: bool = True, do_update_profile: bool = True, summarize: bool = True) -> str:
     """Post-conversation: extracts durable facts, updates profile, feeds knowledge graph, stores summary."""
-    return json.dumps(await _post("/conversation-hook", {"conversation": conversation, "extract_facts": extract_facts, "update_profile": do_update_profile, "summarize": summarize, "store_summary": True}), ensure_ascii=False)
+    payload = {
+        "conversation": conversation, "extract_facts": extract_facts,
+        "update_profile": do_update_profile, "summarize": summarize, "store_summary": True,
+    }
+    return json.dumps(await _post("/conversation-hook", payload), ensure_ascii=False)
 
 # ====================== CONTEXT PREFETCH ======================
 
