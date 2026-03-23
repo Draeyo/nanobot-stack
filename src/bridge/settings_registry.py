@@ -159,7 +159,8 @@ def get_all_settings() -> list[dict[str, Any]]:
     """Return all settings grouped by section."""
     result = []
     for s in _SETTINGS:
-        current = os.getenv(s.key, s.default)
+        default: str = s.default
+        current = os.getenv(s.key, default)
         result.append({
             "key": s.key,
             "value": "********" if s.sensitive and current else current,
@@ -176,7 +177,8 @@ def get_setting(key: str) -> dict[str, Any] | None:
     s = _SETTINGS_BY_KEY.get(key)
     if not s:
         return None
-    current = os.getenv(s.key, s.default)
+    default: str = s.default
+    current = os.getenv(s.key, default)
     return {
         "key": s.key,
         "value": "********" if s.sensitive and current else current,

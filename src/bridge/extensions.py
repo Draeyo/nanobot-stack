@@ -192,7 +192,11 @@ def context_prefetch(body: PrefetchIn, request: Request):
     except Exception:
         logger.exception("Failed to load user profile")
         profile = {}
-    context = build_context_prefetch(body.query, simple_search, profile)
+    try:
+        context = build_context_prefetch(body.query, simple_search, profile)
+    except Exception:
+        logger.exception("context prefetch failed")
+        raise HTTPException(status_code=500, detail="Context prefetch failed")
 
     # Proactive hints from knowledge graph
     kg_context = ""
@@ -261,25 +265,34 @@ def compact_memories_endpoint(body: CompactIn, request: Request):
 
 def _compact_logic(body: CompactIn, request: Request):
     if _verify_token: _verify_token(request)
-    from conversation_memory import compact_memories
+    try:
+        from conversation_memory import compact_memories
+    except ImportError:
+        raise HTTPException(status_code=501, detail="Compaction module not available")
 
-    results = _search_fn(query=body.subject, collections=[body.collection], limit=body.limit)
-    memories = results.get("results", [])
-    if len(memories) < 2:
-        return {"compacted": False, "reason": f"only {len(memories)} memories found"}
+    try:
+        results = _search_fn(query=body.subject, collections=[body.collection], limit=body.limit)
+        memories = results.get("results", [])
+        if len(memories) < 2:
+            return {"compacted": False, "reason": f"only {len(memories)} memories found"}
 
-    compaction = compact_memories(body.subject, memories, _run_chat_fn)
-    if compaction.get("compacted") and compaction.get("merged_text"):
-        _remember_fn(
-            text=compaction["merged_text"],
-            collection=body.collection,
-            subject=body.subject,
-            tags=compaction.get("tags", []),
-            source="compaction",
-            summarize=False,
-        )
-        compaction["new_memory_stored"] = True
-    return compaction
+        compaction = compact_memories(body.subject, memories, _run_chat_fn)
+        if compaction.get("compacted") and compaction.get("merged_text"):
+            _remember_fn(
+                text=compaction["merged_text"],
+                collection=body.collection,
+                subject=body.subject,
+                tags=compaction.get("tags", []),
+                source="compaction",
+                summarize=False,
+            )
+            compaction["new_memory_stored"] = True
+        return compaction
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("Memory compaction failed")
+        raise HTTPException(status_code=500, detail="Memory compaction failed")
 
 # --------------------------------------------------------------------------
 # Planning (with parallel execution support)
@@ -360,6 +373,16 @@ Sources:
 @router.post("/smart-chat")
 def smart_chat(body: SmartChatIn, request: Request = None):
     if request and _verify_token: _verify_token(request)
+    try:
+        return _smart_chat_inner(body)
+    except HTTPException:
+        raise
+    except Exception:
+        logger.exception("smart-chat pipeline failed")
+        raise HTTPException(status_code=500, detail="Chat pipeline failed")
+
+
+def _smart_chat_inner(body: SmartChatIn) -> dict[str, Any]:
     from query_classifier import classify_query
     from conversation_memory import build_context_prefetch
     from user_profile import load_profile
@@ -581,7 +604,7 @@ def smart_chat_pipeline(messages: list[dict[str, str]], session_id: str = "",
         enable_self_critique=enable_self_critique,
     )
     # Build a minimal mock request for the auth-free path
-    return smart_chat(body, request=None)
+    return _smart_chat_inner(body)
 
 # --------------------------------------------------------------------------
 # Explain mode — show full pipeline trace
@@ -672,8 +695,12 @@ def kg_relations(body: KGRelationIn, request: Request):
 @router.get("/knowledge-graph/stats")
 def kg_stats(request: Request):
     if _verify_token: _verify_token(request)
-    from knowledge_graph import get_stats
-    return get_stats()
+    try:
+        from knowledge_graph import get_stats
+        return get_stats()
+    except Exception:
+        logger.exception("Failed to get KG stats")
+        raise HTTPException(status_code=500, detail="Knowledge graph stats unavailable")
 
 # --------------------------------------------------------------------------
 # Code interpreter

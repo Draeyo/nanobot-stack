@@ -73,9 +73,18 @@ async def rag_health() -> str:
 # ====================== SMART CHAT v2 ======================
 
 @mcp.tool()
-async def smart_chat(messages: list[dict[str, str]], auto_classify: bool = True, session_id: str = "", enable_hyde: bool = True, enable_citations: bool = True, enable_self_critique: bool = True) -> str:
-    """Smart chat v2: classifies query, rewrites with HyDE for better retrieval, detects tone, adapts style, adds inline citations [1][2], applies self-critique, and uses knowledge graph context."""
-    return json.dumps(await _post("/smart-chat", {"messages": messages, "auto_classify": auto_classify, "session_id": session_id, "enable_hyde": enable_hyde, "enable_citations": enable_citations, "enable_self_critique": enable_self_critique}), ensure_ascii=False)
+async def smart_chat(
+    messages: list[dict[str, str]], auto_classify: bool = True,
+    session_id: str = "", enable_hyde: bool = True,
+    enable_citations: bool = True, enable_self_critique: bool = True,
+) -> str:
+    """Smart chat v2: classifies, rewrites with HyDE, detects tone, adds citations, applies self-critique."""
+    payload = {
+        "messages": messages, "auto_classify": auto_classify,
+        "session_id": session_id, "enable_hyde": enable_hyde,
+        "enable_citations": enable_citations, "enable_self_critique": enable_self_critique,
+    }
+    return json.dumps(await _post("/smart-chat", payload), ensure_ascii=False)
 
 # ====================== CLASSIFY ======================
 
@@ -88,8 +97,10 @@ async def classify_query(query: str) -> str:
 
 @mcp.tool()
 async def rewrite_query(query: str, mode: str = "hyde") -> str:
-    """Rewrite a query for better retrieval. Modes: 'hyde' generates a hypothetical answer passage, 'multi' creates multiple perspectives, 'both' combines."""
-    return json.dumps(await _post("/query-rewrite", {"query": query, "mode": mode}), ensure_ascii=False)
+    """Rewrite a query for better retrieval. Modes: hyde, multi, or both."""
+    return json.dumps(
+        await _post("/query-rewrite", {"query": query, "mode": mode}), ensure_ascii=False
+    )
 
 # ====================== CONVERSATION HOOK ======================
 
@@ -139,26 +150,37 @@ async def fetch_url(url: str) -> str:
 @mcp.tool()
 async def notify(message: str, title: str = "nanobot", level: str = "info") -> str:
     """Send a notification via webhook (supports ntfy, Slack, Telegram)."""
-    return json.dumps(await _post("/notify", {"message": message, "title": title, "level": level}), ensure_ascii=False)
+    return json.dumps(
+        await _post("/notify", {"message": message, "title": title, "level": level}),
+        ensure_ascii=False,
+    )
 
 # ====================== CODE INTERPRETER ======================
 
 @mcp.tool()
 async def execute_code(code: str, timeout: int = 30) -> str:
-    """Execute Python code in a secure sandbox. For calculations, data transformations, string processing. No filesystem/network. Allowed: math, statistics, re, json, datetime, collections, itertools."""
-    return json.dumps(await _post("/code-execute", {"code": code, "timeout": timeout}), ensure_ascii=False)
+    """Execute Python code in a secure sandbox. No filesystem/network access."""
+    return json.dumps(
+        await _post("/code-execute", {"code": code, "timeout": timeout}), ensure_ascii=False
+    )
 
 # ====================== KNOWLEDGE GRAPH ======================
 
 @mcp.tool()
 async def query_knowledge_graph(entity: str, depth: int = 1) -> str:
-    """Query the knowledge graph for an entity and its relationships (people, projects, technologies, decisions)."""
-    return json.dumps(await _post("/knowledge-graph/query", {"entity": entity, "depth": depth}), ensure_ascii=False)
+    """Query the knowledge graph for an entity and its relationships."""
+    return json.dumps(
+        await _post("/knowledge-graph/query", {"entity": entity, "depth": depth}),
+        ensure_ascii=False,
+    )
 
 @mcp.tool()
 async def find_relations(entity1: str, entity2: str) -> str:
     """Find all relationships between two entities in the knowledge graph."""
-    return json.dumps(await _post("/knowledge-graph/relations", {"entity1": entity1, "entity2": entity2}), ensure_ascii=False)
+    return json.dumps(
+        await _post("/knowledge-graph/relations", {"entity1": entity1, "entity2": entity2}),
+        ensure_ascii=False,
+    )
 
 # ====================== EXPLAIN ======================
 
@@ -170,9 +192,15 @@ async def explain_query(query: str) -> str:
 # ====================== EXPORT ======================
 
 @mcp.tool()
-async def export_conversation(messages: list[dict[str, str]], format: str = "markdown", title: str = "Conversation") -> str:
+async def export_conversation(
+    messages: list[dict[str, str]], output_format: str = "markdown",
+    title: str = "Conversation",
+) -> str:
     """Export a conversation as Markdown or structured JSON for archiving."""
-    return json.dumps(await _post("/export", {"messages": messages, "format": format, "title": title}), ensure_ascii=False)
+    return json.dumps(
+        await _post("/export", {"messages": messages, "format": output_format, "title": title}),
+        ensure_ascii=False,
+    )
 
 # ====================== PII CHECK ======================
 

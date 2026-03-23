@@ -74,7 +74,8 @@ class RateLimiterRegistry:
     def check_per_user(self, name: str, user_id: str, tokens: int = 1) -> None:
         """Per-user rate limiting. Creates a separate bucket per user."""
         if not user_id:
-            return self.check(name, tokens)
+            self.check(name, tokens)
+            return
 
         key = f"{name}:user:{user_id}"
         with self._lock:
