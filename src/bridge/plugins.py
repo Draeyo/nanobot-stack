@@ -184,9 +184,10 @@ class PluginRegistry:
             return {"error": f"Unknown plugin tool: {tool_name}"}
         try:
             return tool.fn(**kwargs)
-        except Exception as exc:
-            logger.warning("Plugin tool %s failed: %s", tool_name, exc)
-            return {"error": str(exc)}
+        except Exception:
+            # Log full exception details server-side, but do not expose them to the client.
+            logger.exception("Plugin tool %s failed", tool_name)
+            return {"error": f"Plugin tool {tool_name} failed"}
 
     def run_hooks(self, event: str, **kwargs) -> list[Any]:
         """Run all hooks for an event, in priority order."""

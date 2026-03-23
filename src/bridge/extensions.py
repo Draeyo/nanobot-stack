@@ -724,8 +724,10 @@ def export_endpoint(body: ExportIn, request: Request):
 # --------------------------------------------------------------------------
 # Plugin management
 # --------------------------------------------------------------------------
-@router.get("/plugins")
-def list_plugins(request: Request):
+    except Exception:
+        # Log detailed error server-side, but return a generic error to the client.
+        logger.exception("Failed to list plugins")
+        return {"plugins": [], "tools": [], "error": "Failed to list plugins"}
     if _verify_token: _verify_token(request)
     try:
         from plugins import plugin_registry
