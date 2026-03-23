@@ -58,6 +58,8 @@ Spec complète : [`2026-03-23-nanobot-v10-evolution-design.md`](2026-03-23-nanob
 
 ### 2.1 Trust Engine
 
+Spec : [`2026-03-24-trust-engine.md`](2026-03-24-trust-engine.md)
+
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
 | Niveaux de confiance | `trust_engine.py` | ✅ | `auto`, `notify_then_execute`, `approval_required`, `blocked` |
@@ -68,6 +70,8 @@ Spec complète : [`2026-03-23-nanobot-v10-evolution-design.md`](2026-03-23-nanob
 | Onglet Admin UI | `admin_ui.py` | 🔧 | Dropdowns trust level, compteurs, promotion manuelle |
 
 ### 2.2 Mémoire Procédurale
+
+Spec : [`2026-03-24-procedural-memory.md`](2026-03-24-procedural-memory.md)
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -101,6 +105,8 @@ Spec complète : [`2026-03-23-nanobot-v10-evolution-design.md`](2026-03-23-nanob
 
 ### 2.5 Architecture Sub-Agents
 
+Spec : [`2026-03-24-sub-agents-architecture.md`](2026-03-24-sub-agents-architecture.md)
+
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
 | AgentBase | `agents/base.py` | ✅ | Interface commune, `AgentResult` |
@@ -110,7 +116,9 @@ Spec complète : [`2026-03-23-nanobot-v10-evolution-design.md`](2026-03-23-nanob
 | API agents | `extensions.py` | ✅ | `POST /agent/run`, `GET /agent/status`, `GET /agent/history` |
 | Onglet Admin UI | `admin_ui.py` | 🔧 | Agents disponibles, exécutions récentes, coût |
 
-### 2.6 Cache Sémantique
+### 2.6 Cache Sémantique, Budget Tokens & Routing
+
+Spec : [`2026-03-24-semantic-cache-token-budget-routing.md`](2026-03-24-semantic-cache-token-budget-routing.md)
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -196,7 +204,9 @@ Spec : [`2026-03-24-sub-project-c-rss-ingestion.md`](2026-03-24-sub-project-c-rs
 
 ## Phase 4 — Features Avancées (Planifié)
 
-### 4.1 Admin UI v2 — Onglets manquants 💡
+### 4.1 Admin UI v2 — Onglets manquants 🔧
+
+Spec : [`2026-03-24-admin-ui-v2.md`](2026-03-24-admin-ui-v2.md)
 
 Les onglets suivants sont spécifiés dans le v10 evolution design mais pas encore implémentés :
 
