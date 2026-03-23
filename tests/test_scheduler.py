@@ -163,3 +163,37 @@ class TestJobCRUD:
         page = mgr.get_job_history("job-1", limit=2, offset=2)
         assert len(all_runs) == 5
         assert len(page) == 2
+
+
+class TestSectionCollectors:
+    async def test_resolve_template_variables(self):
+        from scheduler_executor import JobExecutor
+        executor = JobExecutor(db_path=":memory:", notifier=MagicMock(), qdrant=None)
+        result = executor._resolve_template("Hello {{job_name}} on {{hostname}}", job_name="Test")
+        assert "Test" in result
+        assert "{{job_name}}" not in result
+        assert "{{hostname}}" not in result
+
+    async def test_personal_notes_window_24h_for_daily_cron(self):
+        """Cron running once/day should use 24h window."""
+        from scheduler_executor import JobExecutor
+        executor = JobExecutor(db_path=":memory:", notifier=MagicMock(), qdrant=None)
+        window = executor._notes_window_hours("0 8 * * *", last_run=None)
+        assert window == 24
+
+    async def test_personal_notes_window_since_last_run_for_sub_daily(self):
+        """Cron running every 30 min should use last_run window."""
+        from scheduler_executor import JobExecutor
+        executor = JobExecutor(db_path=":memory:", notifier=MagicMock(), qdrant=None)
+        window = executor._notes_window_hours("*/30 * * * *", last_run=None)
+        assert window <= 2  # defaults to 1h when no last_run
+
+    async def test_topics_section_blocked_for_high_frequency_cron(self):
+        """topics section should not be collected for cron < 6h interval."""
+        from scheduler_executor import JobExecutor
+        from croniter import croniter
+        executor = JobExecutor(db_path=":memory:", notifier=MagicMock(), qdrant=None)
+        # Every 30 min = < 6h
+        assert executor._is_high_frequency("*/30 * * * *") is True
+        # Once daily = not high frequency
+        assert executor._is_high_frequency("0 8 * * *") is False
