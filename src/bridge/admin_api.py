@@ -85,7 +85,7 @@ def read_audit_log(
                 entries.append(record)
     except Exception as exc:
         logger.warning("Failed to read audit log: %s", exc)
-        return {"entries": [], "total": 0, "error": str(exc)}
+        return {"entries": [], "total": 0, "error": "failed to read audit log"}
 
     # Most recent first
     entries.reverse()
