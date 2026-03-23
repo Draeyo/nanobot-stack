@@ -205,9 +205,191 @@ class JobExecutor:
         return "\n\n".join(parts)
 
     # ------------------------------------------------------------------
-    # Main execution loop (LLM + delivery — implemented in Task 6)
+    # Main execution loop (LLM + delivery)
     # ------------------------------------------------------------------
 
     async def run(self, job_id: str) -> None:
-        """Full job execution. Implemented in Task 6."""
-        raise NotImplementedError
+        """Full job execution: collect → LLM → deliver → persist."""
+        db = sqlite3.connect(self._db_path)
+        try:
+            row = db.execute(
+                "SELECT name, cron, prompt, sections, channels, timeout_s, last_run, last_status "
+                "FROM scheduled_jobs WHERE id=?", (job_id,)
+            ).fetchone()
+        finally:
+            db.close()
+
+        if not row:
+            logger.warning("Job %s not found", job_id)
+            return
+
+        name, cron, prompt, sections_json, channels_json, timeout_s, last_run, last_status = row
+
+        if last_status == "running":
+            logger.info("Job %s already running, skipping", job_id)
+            return
+
+        sections = json.loads(sections_json or "[]")
+        channels = json.loads(channels_json or "[]")
+        run_id = str(uuid.uuid4())
+        started_at = datetime.now(timezone.utc).isoformat()
+
+        self._update_job_status(job_id, "running", None, None)
+        self._insert_run(run_id, job_id, started_at, "running", None, None, None)
+
+        output = None
+        error = None
+        channels_ok: dict[str, bool] = {}
+        try:
+            sections_text = await asyncio.wait_for(
+                self.collect_sections(sections, cron, last_run, prompt, name),
+                timeout=float(timeout_s)
+            )
+
+            output = await asyncio.wait_for(
+                self._call_llm(sections_text, name),
+                timeout=float(timeout_s)
+            )
+
+            # Best-effort PII filtering
+            try:
+                from pii_scanner import scan_text  # type: ignore[import]
+                output = scan_text(output)
+            except Exception:
+                pass
+
+            channels_ok = await self._notifier.broadcast(channels, output)
+
+            # Best-effort Qdrant storage
+            if self._qdrant and output:
+                try:
+                    from qdrant_client.models import PointStruct  # type: ignore[import]
+                    self._qdrant.upsert(
+                        collection_name="conversation_summaries",
+                        points=[PointStruct(
+                            id=str(uuid.uuid4()),
+                            vector=[0.0],
+                            payload={"content": output[:500], "source": "scheduler",
+                                     "job_id": job_id, "created_at": started_at}
+                        )]
+                    )
+                except Exception:
+                    logger.exception("Failed to store briefing in Qdrant")
+
+            status = "ok"
+        except asyncio.TimeoutError:
+            status = "timeout"
+            error = f"Job exceeded timeout of {timeout_s}s"
+            logger.warning("Job %s timed out after %ss", job_id, timeout_s)
+        except Exception as e:
+            status = "error"
+            error = str(e)
+            logger.exception("Job %s failed", job_id)
+
+        finished_at = datetime.now(timezone.utc)
+        duration_ms = int(
+            (finished_at - datetime.fromisoformat(started_at)).total_seconds() * 1000
+        )
+        output_preview = (output or "")[:500]
+
+        self._update_job_status(job_id, status, started_at, output_preview)
+        self._finalize_run(run_id, status, duration_ms,
+                           (output or "")[:2000], error, json.dumps(channels_ok))
+
+    async def _call_llm(self, context: str, job_name: str) -> str:
+        """Call LLM via AdaptiveRouter for briefing generation."""
+        try:
+            import json as _json
+            config_path = os.path.join(
+                os.path.dirname(__file__), "..", "config", "model_router.json"
+            )
+            with open(config_path) as f:
+                router_cfg = _json.load(f)
+
+            task_routes = router_cfg.get("task_routes", {})
+            candidates_keys = task_routes.get("briefing", task_routes.get("classify_query", []))
+            profiles = router_cfg.get("profiles", {})
+
+            candidate_models = []
+            for key in candidates_keys:
+                p = profiles.get(key, {})
+                model = p.get("model")
+                if model:
+                    candidate_models.append(model)
+
+            from adaptive_router import AdaptiveRouter  # type: ignore[import]
+            ar = AdaptiveRouter()
+            ranked = ar.get_model_ranking("briefing", candidate_models) or candidate_models
+
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        "Tu es un assistant personnel. Génère un briefing clair et structuré "
+                        "en Markdown à partir des données fournies. Sois concis."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": f"Briefing pour '{job_name}':\n\n{context}",
+                },
+            ]
+
+            import litellm  # type: ignore[import]
+            for model in ranked:
+                try:
+                    resp = await litellm.acompletion(
+                        model=model, messages=messages, max_tokens=800
+                    )
+                    result = resp.choices[0].message.content or ""
+                    ar.record_quality("briefing", model, 0.8)
+                    return result
+                except Exception:
+                    logger.warning("Model %s failed for briefing, trying next", model)
+
+            return "Briefing indisponible — tous les modèles ont échoué."
+        except Exception as e:
+            logger.exception("LLM call failed for briefing")
+            return f"Briefing indisponible: {e}"
+
+    def _update_job_status(self, job_id: str, status: str, last_run: str | None,
+                            last_output: str | None) -> None:
+        now = datetime.now(timezone.utc).isoformat()
+        db = sqlite3.connect(self._db_path)
+        try:
+            db.execute(
+                "UPDATE scheduled_jobs SET last_status=?, last_run=COALESCE(?,last_run), "
+                "last_output=COALESCE(?,last_output), updated_at=? WHERE id=?",
+                (status, last_run, last_output, now, job_id)
+            )
+            db.commit()
+        finally:
+            db.close()
+
+    def _insert_run(self, run_id: str, job_id: str, started_at: str,
+                     status: str, output: str | None, error: str | None,
+                     channels_ok: str | None) -> None:
+        db = sqlite3.connect(self._db_path)
+        try:
+            db.execute(
+                "INSERT INTO job_runs "
+                "(id, job_id, started_at, status, output, error, channels_ok) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (run_id, job_id, started_at, status, output, error, channels_ok)
+            )
+            db.commit()
+        finally:
+            db.close()
+
+    def _finalize_run(self, run_id: str, status: str, duration_ms: int,
+                       output: str, error: str | None, channels_ok: str) -> None:
+        db = sqlite3.connect(self._db_path)
+        try:
+            db.execute(
+                "UPDATE job_runs "
+                "SET status=?, duration_ms=?, output=?, error=?, channels_ok=? WHERE id=?",
+                (status, duration_ms, output, error, channels_ok, run_id)
+            )
+            db.commit()
+        finally:
+            db.close()

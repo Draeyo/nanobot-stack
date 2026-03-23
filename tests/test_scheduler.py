@@ -197,3 +197,56 @@ class TestSectionCollectors:
         assert executor._is_high_frequency("*/30 * * * *") is True
         # Once daily = not high frequency
         assert executor._is_high_frequency("0 8 * * *") is False
+
+
+class TestJobExecutorRun:
+    async def test_run_marks_job_running_then_ok(self, tmp_db):
+        from scheduler_executor import JobExecutor
+        _insert_job(tmp_db, "job-1")
+
+        notifier = MagicMock()
+        notifier.broadcast = AsyncMock(return_value={"ntfy": True})
+
+        with patch("scheduler_executor.JobExecutor._call_llm", new_callable=AsyncMock) as llm_mock:
+            llm_mock.return_value = "Voici votre briefing."
+            executor = JobExecutor(db_path=str(tmp_db), notifier=notifier, qdrant=None)
+            await executor.run("job-1")
+
+        db = sqlite3.connect(str(tmp_db))
+        row = db.execute("SELECT last_status FROM scheduled_jobs WHERE id='job-1'").fetchone()
+        run_row = db.execute("SELECT status FROM job_runs WHERE job_id='job-1'").fetchone()
+        db.close()
+        assert row[0] == "ok"
+        assert run_row[0] == "ok"
+
+    async def test_run_skips_if_already_running(self, tmp_db):
+        """If last_status is 'running', skip execution silently."""
+        _insert_job(tmp_db, "job-1", status="running")
+
+        from scheduler_executor import JobExecutor
+        notifier = MagicMock()
+        notifier.broadcast = AsyncMock(return_value={})
+        executor = JobExecutor(db_path=str(tmp_db), notifier=notifier, qdrant=None)
+
+        with patch("scheduler_executor.JobExecutor._call_llm", new_callable=AsyncMock) as llm_mock:
+            await executor.run("job-1")
+            llm_mock.assert_not_called()  # skipped
+
+    async def test_run_records_channels_ok(self, tmp_db):
+        from scheduler_executor import JobExecutor
+        _insert_job(tmp_db, "job-1")
+
+        notifier = MagicMock()
+        notifier.broadcast = AsyncMock(return_value={"ntfy": True, "telegram": False})
+
+        with patch("scheduler_executor.JobExecutor._call_llm", new_callable=AsyncMock) as llm_mock:
+            llm_mock.return_value = "Briefing content."
+            executor = JobExecutor(db_path=str(tmp_db), notifier=notifier, qdrant=None)
+            await executor.run("job-1")
+
+        db = sqlite3.connect(str(tmp_db))
+        run = db.execute("SELECT channels_ok FROM job_runs WHERE job_id='job-1'").fetchone()
+        db.close()
+        channels_ok = json.loads(run[0])
+        assert channels_ok["ntfy"] is True
+        assert channels_ok["telegram"] is False
