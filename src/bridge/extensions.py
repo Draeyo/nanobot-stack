@@ -84,8 +84,9 @@ def conversation_hook(body: ConversationHookIn, request: Request):
         merged_msgs = build_merged_extract_messages(body.messages)
         resp = _run_chat_fn("remember_extract", merged_msgs, json_mode=True, max_tokens=1200)
         data = json.loads(resp.get("text", "{}"))
-    except Exception as e:
-        results["error"] = str(e)
+    except Exception:
+        logger.exception("Conversation hook extraction failed")
+        results["error"] = "extraction failed"
         return results
 
     extraction = {
@@ -144,9 +145,10 @@ def conversation_hook(body: ConversationHookIn, request: Request):
             update_profile(profile_updates)
             results["profile_updated"] = True
             results["profile_changes"] = profile_updates
-        except Exception as e:
+        except Exception:
+            logger.exception("Profile update failed")
             results["profile_updated"] = False
-            results["profile_error"] = str(e)
+            results["profile_error"] = "profile update failed"
     else:
         results["profile_updated"] = False
 
@@ -158,8 +160,9 @@ def conversation_hook(body: ConversationHookIn, request: Request):
             if all_facts_text:
                 kg_result = extract_and_store(all_facts_text, _run_chat_fn)
                 results["knowledge_graph"] = kg_result
-    except Exception as e:
-        results["knowledge_graph"] = {"error": str(e)}
+    except Exception:
+        logger.exception("Knowledge graph extraction failed")
+        results["knowledge_graph"] = {"error": "extraction failed"}
 
     return results
 
