@@ -120,7 +120,7 @@ At deploy time, `lib.sh` loads `stack.env`, applies defaults, and `envsubst` ren
 - All services bind 127.0.0.1 — public access only via Traefik + Authentik.
 
 ### Developer experience
-- **Modular repo** — 15 Python modules, standalone configs, templates.
+- **Modular repo** — 18 Python modules, standalone configs, templates.
 - **`deploy.sh` / `update.sh`** — First install vs fast iteration.
 - **`update.sh --code-only`** — Deploys in seconds.
 - **Preflight checks** — Disk, ports, DNS, Traefik, re-install detection.
@@ -135,7 +135,7 @@ sudo ./update.sh --code-only   # fast (code + templates only)
 sudo ./update.sh --deps-only   # pip only
 ```
 
-## MCP tools (22 total)
+## MCP tools (19 total)
 
 The nanobot agent discovers these tools automatically via the MCP server:
 
@@ -208,9 +208,9 @@ nanobot-stack/
 ├── update.sh                      # fast updater
 ├── rotate-secrets.sh              # secret rotation
 ├── src/
-│   ├── bridge/                    # RAG bridge (15 Python modules)
+│   ├── bridge/                    # RAG bridge (18 Python modules)
 │   │   ├── app.py                 # FastAPI main app
-│   │   ├── extensions.py          # v7 endpoints (smart-chat, planner, tools…)
+│   │   ├── extensions.py          # v8 endpoints (smart-chat, planner, tools…)
 │   │   ├── circuit_breaker.py
 │   │   ├── rate_limiter.py
 │   │   ├── reranker.py            # cross-encoder
@@ -224,8 +224,11 @@ nanobot-stack/
 │   │   ├── user_profile.py        # auto-maintained user profile
 │   │   ├── dashboard.py           # HTML health dashboard
 │   │   ├── audit.py               # audit log middleware
+│   │   ├── streaming.py           # SSE streaming for smart-chat
+│   │   ├── token_optimizer.py     # LLM cache, token tracking, context budget
+│   │   ├── context_compression.py # conversation summarization, dedup, assembly
 │   │   └── requirements.txt
-│   ├── mcp/                       # MCP server (22 tools)
+│   ├── mcp/                       # MCP server (19 tools)
 │   │   ├── rag_mcp_server.py
 │   │   └── requirements.txt
 │   └── config/
