@@ -128,7 +128,7 @@ Internet
 - **HyDE query rewriting**: generates a hypothetical answer passage and uses its embedding for more precise retrieval
 - **Semantic chunking**: embedding-based boundary detection for smarter document splitting
 - **Knowledge graph**: SQLite-backed entity/relationship graph (people, projects, technologies, decisions)
-- **Inline citations**: automatic [1], [2] references with a source list at the end
+- **Inline citations**: automatic \[1\], \[2\] references with a source list at the end
 - **Self-critique**: post-generation review pass that catches errors and improves answer quality
 - **Sentiment detection**: adapts response tone based on user urgency and emotion
 - **Memory decay**: time and access-based scoring so recent/frequent memories rank higher

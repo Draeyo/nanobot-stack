@@ -823,12 +823,13 @@ class WebFetchIn(BaseModel):
 @router.post("/web-fetch")
 async def web_fetch_endpoint(body: WebFetchIn, request: Request):
     if _verify_token: _verify_token(request)
-    from tools import web_fetch
     try:
-        return await web_fetch(body.url)
+        from tools import web_fetch
+        result = await web_fetch(body.url)
     except Exception:
-        logger.exception("web_fetch failed for url=%s", body.url)
+        logger.error("web_fetch failed")
         raise HTTPException(status_code=502, detail="Web fetch failed")
+    return result
 
 class NotifyIn(BaseModel):
     message: str
@@ -838,12 +839,13 @@ class NotifyIn(BaseModel):
 @router.post("/notify")
 async def notify_endpoint(body: NotifyIn, request: Request):
     if _verify_token: _verify_token(request)
-    from tools import send_notification
     try:
-        return await send_notification(body.message, body.title, body.level)
+        from tools import send_notification
+        result = await send_notification(body.message, body.title, body.level)
     except Exception:
-        logger.exception("send_notification failed")
+        logger.error("send_notification failed")
         raise HTTPException(status_code=502, detail="Notification delivery failed")
+    return result
 
 # --------------------------------------------------------------------------
 # Execute step (from planner)
@@ -880,9 +882,12 @@ def execute_step_endpoint(body: ExecuteStepIn, request: Request):
 # --------------------------------------------------------------------------
 @router.get("/dashboard", response_class=HTMLResponse)
 def dashboard():
-    from dashboard import get_dashboard_html, DASHBOARD_ENABLED
+    try:
+        from dashboard import get_dashboard_html, DASHBOARD_ENABLED
+    except ImportError:
+        raise HTTPException(status_code=404, detail="Dashboard not available")
     if not DASHBOARD_ENABLED:
-        raise HTTPException(status_code=404, detail="dashboard disabled")
+        raise HTTPException(status_code=404, detail="Dashboard disabled")
     return get_dashboard_html()
 
 # --------------------------------------------------------------------------

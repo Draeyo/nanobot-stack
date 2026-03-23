@@ -175,16 +175,13 @@ def propose_config_change(file_name: str, content: str,
                                            tofile=f"proposed/{file_name}")
         diff_preview = "".join(diff_lines)
 
-    # Stage the content
+    # Stage the content — file_name is guaranteed to be in ALLOWED_CONFIG_FILES
+    # (checked above), so we use a sanitised slug instead of the raw input.
     change_id = uuid.uuid4().hex[:12]
     STAGING_DIR.mkdir(parents=True, exist_ok=True)
-    # Validate file_name to prevent path traversal
-    safe_name = pathlib.Path(file_name).name
-    if safe_name != file_name:
-        return {"ok": False, "error": "Invalid file name (path traversal rejected)."}
-    staging_file = (STAGING_DIR / f"{change_id}_{safe_name}").resolve()
-    if not str(staging_file).startswith(str(STAGING_DIR.resolve())):
-        return {"ok": False, "error": "Invalid file name for staging."}
+    # Build a filesystem-safe slug from the allowlist key (no user data in path)
+    safe_slug = file_name.replace(".", "_").replace("/", "_").replace("\\", "_")
+    staging_file = STAGING_DIR / f"{change_id}_{safe_slug}"
     staging_file.write_text(content, encoding="utf-8")
 
     now = datetime.now(timezone.utc)
