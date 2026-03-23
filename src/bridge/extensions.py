@@ -7,7 +7,8 @@ Adds: /classify, /conversation-hook, /context-prefetch, /summarize-conversation,
 /workflows, /agent/status, /agent/history, /agent/run
 """
 from __future__ import annotations
-import json, logging
+import json, logging, os
+from collections import deque
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -902,22 +903,10 @@ def execute_step_endpoint(body: ExecuteStepIn, request: Request):
     from planner import execute_step
 
     step = {"action": body.tool, "description": body.tool, "input": json.dumps(body.input or {}), "depends_on": []}
-
-    def simple_search(q):
-        return _search_fn(query=q, collections=[], limit=5)
-    def simple_ask(q):
-        results = _search_fn(query=q, collections=[], limit=5)
-        snippets = [r.get("payload", {}).get("text", "")[:500] for r in results.get("results", [])]
-        answer = _run_chat_fn("retrieval_answer", [
-            {"role": "system", "content": "Answer from context."},
-            {"role": "user", "content": json.dumps({"question": q, "context": snippets})},
-        ], max_tokens=1200)
-        return answer.get("text", "")
-    def simple_remember(text):
-        return _remember_fn(text=text, collection="memory_personal", source="planner", summarize=True)
-
+    tool_fns = _build_tool_registry()
     return execute_step(step, {}, _run_chat_fn,
-                        search_fn=simple_search, ask_fn=simple_ask, remember_fn=simple_remember)
+                        search_fn=tool_fns["search_fn"], ask_fn=tool_fns["ask_fn"],
+                        remember_fn=tool_fns["remember_fn"])
 
 # --------------------------------------------------------------------------
 # Dashboard
@@ -982,7 +971,8 @@ def toggle_workflow_endpoint(workflow_id: int, body: ToggleWorkflowIn, request: 
 # --------------------------------------------------------------------------
 # v10: Agent Orchestrator
 # --------------------------------------------------------------------------
-_agent_history: list[dict] = []
+_agent_history: deque[dict] = deque(maxlen=200)
+_ORCHESTRATOR_ENABLED = os.getenv("AGENT_ORCHESTRATOR_ENABLED", "false").lower() == "true"
 
 
 @router.get("/agent/status")
@@ -1000,7 +990,7 @@ def agent_status_endpoint(request: Request):
 def agent_history_endpoint(request: Request, limit: int = 50):
     """Return recent agent execution history."""
     if _verify_token: _verify_token(request)
-    return {"executions": _agent_history[-limit:]}
+    return {"executions": list(_agent_history)[-limit:]}
 
 
 class AgentRunIn(BaseModel):
@@ -1035,9 +1025,6 @@ def agent_run_endpoint(body: AgentRunIn, request: Request):
             "status": result.status,
             "tokens": result.cost_tokens,
         })
-        # Cap history
-        if len(_agent_history) > 200:
-            _agent_history[:] = _agent_history[-200:]
 
         return {
             "ok": True,
@@ -1052,5 +1039,4 @@ def agent_run_endpoint(body: AgentRunIn, request: Request):
 
 
 def _is_orchestrator_enabled() -> bool:
-    import os
-    return os.getenv("AGENT_ORCHESTRATOR_ENABLED", "false").lower() == "true"
+    return _ORCHESTRATOR_ENABLED

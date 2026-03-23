@@ -33,8 +33,6 @@ class AgentBase:
 
     name: str = "base"
     description: str = "Base agent"
-    tools: list[str] = []
-    trust_overrides: dict[str, str] = {}
     max_steps: int = 10
 
     def __init__(
@@ -53,6 +51,8 @@ class AgentBase:
         self.run_chat_fn = run_chat_fn
         self.tool_registry: dict[str, Callable[..., Any]] = tool_registry or {}
         self.trust_engine = trust_engine
+        self.tools: list[str] = list(getattr(self.__class__, "tools", []))
+        self.trust_overrides: dict[str, str] = dict(getattr(self.__class__, "trust_overrides", {}))
         self._actions_log: list[dict[str, Any]] = []
         self._total_tokens: int = 0
 

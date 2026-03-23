@@ -21,6 +21,7 @@ STATE_DIR = pathlib.Path(os.getenv("STATE_DIR", "/opt/nanobot-stack/rag-bridge/s
 SCORES_PATH = STATE_DIR / "adaptive_scores.json"
 MIN_SAMPLES = int(os.getenv("ADAPTIVE_MIN_SAMPLES", "5"))
 DECAY_FACTOR = float(os.getenv("ADAPTIVE_DECAY_FACTOR", "0.95"))
+PREMIUM_ONLY_TASKS = frozenset({"code_reasoning", "incident_triage"})
 
 
 class AdaptiveRouter:
@@ -104,7 +105,7 @@ class AdaptiveRouter:
         if not ADAPTIVE_ROUTING_ENABLED:
             return candidates
 
-        premium_only_tasks = {"code_reasoning", "incident_triage"}
+        premium_only_tasks = PREMIUM_ONLY_TASKS
 
         scored = []
         unscored = []
