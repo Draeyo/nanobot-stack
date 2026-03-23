@@ -171,8 +171,11 @@ class PrefetchIn(BaseModel):
 @router.post("/context-prefetch")
 def context_prefetch(body: PrefetchIn, request: Request):
     if _verify_token: _verify_token(request)
-    from conversation_memory import build_context_prefetch
-    from user_profile import load_profile
+    try:
+        from conversation_memory import build_context_prefetch
+        from user_profile import load_profile
+    except ImportError:
+        raise HTTPException(status_code=501, detail="Context prefetch modules not available")
 
     def simple_search(query, collections, limit=5):
         """
@@ -184,7 +187,11 @@ def context_prefetch(body: PrefetchIn, request: Request):
         # Only propagate the actual search hits; ignore any extra metadata.
         return search_response.get("results", []) if isinstance(search_response, dict) else []
 
-    profile = load_profile()
+    try:
+        profile = load_profile()
+    except Exception:
+        logger.exception("Failed to load user profile")
+        profile = {}
     context = build_context_prefetch(body.query, simple_search, profile)
 
     # Proactive hints from knowledge graph
@@ -724,16 +731,15 @@ def export_endpoint(body: ExportIn, request: Request):
 # --------------------------------------------------------------------------
 # Plugin management
 # --------------------------------------------------------------------------
-    except Exception:
-        # Log detailed error server-side, but return a generic error to the client.
-        logger.exception("Failed to list plugins")
-        return {"plugins": [], "tools": [], "error": "Failed to list plugins"}
+@router.get("/plugins")
+def list_plugins(request: Request):
     if _verify_token: _verify_token(request)
     try:
         from plugins import plugin_registry
         return {"plugins": plugin_registry.list_plugins(), "tools": plugin_registry.list_tools()}
-    except Exception as e:
-        return {"plugins": [], "error": str(e)}
+    except Exception:
+        logger.exception("Failed to list plugins")
+        return {"plugins": [], "tools": [], "error": "Failed to list plugins"}
 
 class PluginToolIn(BaseModel):
     tool_name: str
@@ -818,7 +824,11 @@ class WebFetchIn(BaseModel):
 async def web_fetch_endpoint(body: WebFetchIn, request: Request):
     if _verify_token: _verify_token(request)
     from tools import web_fetch
-    return await web_fetch(body.url)
+    try:
+        return await web_fetch(body.url)
+    except Exception:
+        logger.exception("web_fetch failed for url=%s", body.url)
+        raise HTTPException(status_code=502, detail="Web fetch failed")
 
 class NotifyIn(BaseModel):
     message: str
@@ -829,7 +839,11 @@ class NotifyIn(BaseModel):
 async def notify_endpoint(body: NotifyIn, request: Request):
     if _verify_token: _verify_token(request)
     from tools import send_notification
-    return await send_notification(body.message, body.title, body.level)
+    try:
+        return await send_notification(body.message, body.title, body.level)
+    except Exception:
+        logger.exception("send_notification failed")
+        raise HTTPException(status_code=502, detail="Notification delivery failed")
 
 # --------------------------------------------------------------------------
 # Execute step (from planner)
@@ -872,38 +886,6 @@ def dashboard():
     return get_dashboard_html()
 
 # --------------------------------------------------------------------------
-# Shell / web-fetch / notify (wired for MCP server)
-# --------------------------------------------------------------------------
-class ShellIn(BaseModel):
-    command: str
-
-class WebFetchIn(BaseModel):
-    url: str
-
-class NotifyIn(BaseModel):
-    message: str
-    title: str = "nanobot"
-    level: str = "info"
-
-@router.post("/shell")
-def shell_endpoint(body: ShellIn, request: Request):
-    if _verify_token: _verify_token(request)
-    from tools import run_shell_command
-    return run_shell_command(body.command)
-
-@router.post("/web-fetch")
-async def web_fetch_endpoint(body: WebFetchIn, request: Request):
-    if _verify_token: _verify_token(request)
-    from tools import web_fetch
-    return await web_fetch(body.url)
-
-@router.post("/notify")
-async def notify_endpoint(body: NotifyIn, request: Request):
-    if _verify_token: _verify_token(request)
-    from tools import send_notification
-    return await send_notification(body.message, body.title, body.level)
-
-# --------------------------------------------------------------------------
 # Channel adapter status
 # --------------------------------------------------------------------------
 @router.get("/channels/status")
@@ -912,5 +894,6 @@ def channel_status_endpoint(request: Request):
     try:
         from channels import channel_manager
         return channel_manager.status()
-    except Exception as e:
-        return {"error": str(e), "channels": {}}
+    except Exception:
+        logger.exception("Failed to get channel status")
+        return {"error": "Failed to retrieve channel status", "channels": {}}

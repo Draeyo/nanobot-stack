@@ -178,13 +178,12 @@ def propose_config_change(file_name: str, content: str,
     # Stage the content
     change_id = uuid.uuid4().hex[:12]
     STAGING_DIR.mkdir(parents=True, exist_ok=True)
-    staging_file = (STAGING_DIR / f"{change_id}_{file_name}").resolve()
-    try:
-        STAGING_DIR.resolve()
-    except FileNotFoundError:
-        # If STAGING_DIR was removed between mkdir and here, fail safely
-        return {"ok": False, "error": "Staging directory is unavailable."}
-    if staging_file.parent != STAGING_DIR.resolve():
+    # Validate file_name to prevent path traversal
+    safe_name = pathlib.Path(file_name).name
+    if safe_name != file_name:
+        return {"ok": False, "error": "Invalid file name (path traversal rejected)."}
+    staging_file = (STAGING_DIR / f"{change_id}_{safe_name}").resolve()
+    if not str(staging_file).startswith(str(STAGING_DIR.resolve())):
         return {"ok": False, "error": "Invalid file name for staging."}
     staging_file.write_text(content, encoding="utf-8")
 
@@ -312,15 +311,21 @@ def rollback_change(change_id: str) -> dict[str, Any]:
     if change["status"] != "applied":
         return {"ok": False, "error": f"change status is '{change['status']}', expected 'applied'"}
 
-    backup_path = change.get("backup_path", "")
-    if not backup_path or not pathlib.Path(backup_path).exists():
+    backup_path_str = change.get("backup_path", "")
+    if not backup_path_str:
         return {"ok": False, "error": "backup file not found, cannot rollback"}
+    backup_path = pathlib.Path(backup_path_str).resolve()
+    if not backup_path.exists():
+        return {"ok": False, "error": "backup file not found, cannot rollback"}
+    # Ensure the backup path is inside the expected backup directory
+    if not str(backup_path).startswith(str(BACKUP_DIR.resolve())):
+        return {"ok": False, "error": "backup path is outside the allowed directory"}
 
     actual_path = _resolve_path(change["file_name"])
     if not actual_path:
         return {"ok": False, "error": f"cannot resolve path for '{change['file_name']}'"}
 
-    shutil.copy2(backup_path, str(actual_path))
+    shutil.copy2(str(backup_path), str(actual_path))
 
     with _lock:
         db = _init_db()
