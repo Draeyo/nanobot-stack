@@ -23,6 +23,15 @@ from pydantic import BaseModel
 logger = logging.getLogger("rag-bridge.elevated-shell")
 
 STATE_DIR = pathlib.Path(os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state"))
+
+# Trust engine integration (set during app init)
+_trust_engine = None
+
+
+def set_trust_engine(engine) -> None:
+    """Wire the trust engine as policy layer for elevated commands."""
+    global _trust_engine
+    _trust_engine = engine
 ELEVATED_ENABLED = os.getenv("ELEVATED_SHELL_ENABLED", "false").lower() == "true"
 ELEVATED_TIMEOUT = int(os.getenv("ELEVATED_SHELL_TIMEOUT", "60"))
 ACTION_EXPIRY_MINUTES = int(os.getenv("ELEVATED_ACTION_EXPIRY", "30"))
@@ -162,10 +171,30 @@ def _audit(action_id: str, transition: str, command: str, user: str = "") -> Non
 # ---------------------------------------------------------------------------
 
 def propose_action(command: str, description: str = "", proposed_by: str = "agent") -> dict[str, Any]:
-    """Validate and store a pending elevated action."""
+    """Validate and store a pending elevated action.
+
+    If a trust engine is configured, consults it first:
+    - auto: bypasses the approval queue and executes immediately
+    - notify_then_execute: records as pending_notify (60s window)
+    - approval_required: normal approval queue (default behavior)
+    - blocked: refuses immediately
+    """
     ok, reason = validate_elevated_command(command)
     if not ok:
         return {"ok": False, "error": f"Command not allowed: {reason}"}
+
+    # Consult trust engine if available
+    if _trust_engine:
+        trust_level = _trust_engine.get_trust_level("shell_write")
+
+        if trust_level == "blocked":
+            _trust_engine.record_outcome("shell_write", command, "blocked")
+            return {"ok": False, "error": "Elevated shell commands are blocked by trust policy"}
+
+        if trust_level == "auto":
+            # Bypass approval queue — execute directly
+            _trust_engine.record_outcome("shell_write", command, "auto_executed")
+            return _auto_execute(command, description, proposed_by)
 
     action_id = uuid.uuid4().hex[:12]
     now = datetime.now(timezone.utc)
@@ -186,6 +215,53 @@ def propose_action(command: str, description: str = "", proposed_by: str = "agen
     _audit(action_id, "proposed", command, proposed_by)
     return {"ok": True, "action_id": action_id, "command": command,
             "status": "pending", "expires_at": expires.isoformat()}
+
+
+def _auto_execute(command: str, description: str = "", proposed_by: str = "agent") -> dict[str, Any]:
+    """Execute a command immediately (trust level = auto), with full audit trail."""
+    action_id = uuid.uuid4().hex[:12]
+    now = datetime.now(timezone.utc)
+
+    try:
+        result = subprocess.run(
+            command, shell=True, capture_output=True, text=True,
+            timeout=ELEVATED_TIMEOUT,
+            env={**os.environ, "LANG": "C.UTF-8"},
+            check=False,
+        )
+        exec_result = {
+            "ok": True, "stdout": result.stdout[:8000],
+            "stderr": result.stderr[:4000], "returncode": result.returncode,
+        }
+    except subprocess.TimeoutExpired:
+        exec_result = {"ok": False, "error": f"timeout after {ELEVATED_TIMEOUT}s"}
+    except Exception:
+        logger.exception("Auto-execute failed for '%s'", command)
+        exec_result = {"ok": False, "error": "unexpected error during command execution"}
+
+    # Record in DB for audit trail
+    with _lock:
+        db = _init_db()
+        try:
+            db.execute(
+                "INSERT INTO actions (id, command, description, proposed_at, expires_at, proposed_by, status, executed_at, result_json) "
+                "VALUES (?, ?, ?, ?, ?, ?, 'executed', ?, ?)",
+                (action_id, command, description, now.isoformat(), now.isoformat(),
+                 proposed_by, now.isoformat(), json.dumps(exec_result, ensure_ascii=False)),
+            )
+            db.commit()
+        finally:
+            db.close()
+
+    _audit(action_id, "auto_executed", command, proposed_by)
+
+    # Record success/failure for trust auto-promotion
+    if _trust_engine:
+        outcome = "success" if exec_result.get("ok") else "failure"
+        _trust_engine.record_outcome("shell_write", command, outcome)
+
+    return {"ok": True, "action_id": action_id, "status": "auto_executed",
+            "trust_level": "auto", "result": exec_result}
 
 
 def list_pending() -> list[dict[str, Any]]:

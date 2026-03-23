@@ -1,4 +1,4 @@
-"""nanobot RAG bridge v9 — FastAPI application.
+"""nanobot RAG bridge v10 — FastAPI application.
 
 v7: Reranker, hybrid search, metadata, circuit breaker, rate limiting, metrics, audit, cache.
 v8: Classification, smart-chat, planner, conversation hook, context compression, profile, feedback.
@@ -6,6 +6,9 @@ v9: HyDE query rewriting, citations, knowledge graph, working memory, code inter
     PII filtering, plugin system, file watcher, sentiment detection, self-critique,
     parallel planning, semantic chunking, per-user rate limiting, memory decay,
     episodic/semantic memory types, export, explain mode, Chart.js dashboard.
+v10: Trust engine, procedural memory, sub-agents (orchestrator + ops), semantic cache,
+     token budget, extended classifier (15 types), adaptive routing with budget pressure,
+     enriched knowledge graph, enriched user profile, local-first routing.
 """
 
 from __future__ import annotations
@@ -1329,4 +1332,80 @@ try:
     logger.info("Admin UI mounted (/admin)")
 except Exception as exc:
     logger.info("Admin UI not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# v10: Trust Engine
+# ---------------------------------------------------------------------------
+try:
+    from trust_engine import router as trust_router, init_trust, TRUST_ENGINE_ENABLED
+    if TRUST_ENGINE_ENABLED:
+        init_trust(verify_token_dep=verify_token)
+        app.include_router(trust_router, dependencies=[Depends(verify_token)])
+        # Wire into tools and elevated shell
+        import trust_engine
+        from tools import set_trust_engine as set_tools_trust
+        from elevated_shell import set_trust_engine as set_elevated_trust
+        set_tools_trust(trust_engine)
+        set_elevated_trust(trust_engine)
+        logger.info("v10 trust engine loaded (/trust/*)")
+    else:
+        logger.info("Trust engine disabled (TRUST_ENGINE_ENABLED=false)")
+except Exception as exc:
+    logger.info("v10 trust engine not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# v10: Procedural Memory
+# ---------------------------------------------------------------------------
+try:
+    from procedural_memory import PROCEDURAL_MEMORY_ENABLED
+    if PROCEDURAL_MEMORY_ENABLED:
+        import procedural_memory
+        from planner import set_procedural_memory
+        set_procedural_memory(procedural_memory)
+        logger.info("v10 procedural memory loaded")
+    else:
+        logger.info("Procedural memory disabled (PROCEDURAL_MEMORY_ENABLED=false)")
+except Exception as exc:
+    logger.info("v10 procedural memory not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# v10: Semantic Cache
+# ---------------------------------------------------------------------------
+try:
+    from semantic_cache import SEMANTIC_CACHE_ENABLED, init_semantic_cache
+    if SEMANTIC_CACHE_ENABLED:
+        _sem_cache = init_semantic_cache(qdrant_client=qdrant, embed_fn=lambda t: embed_texts([t])[0][0])
+        logger.info("v10 semantic cache loaded")
+    else:
+        logger.info("Semantic cache disabled (SEMANTIC_CACHE_ENABLED=false)")
+except Exception as exc:
+    logger.info("v10 semantic cache not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# v10: Token Budget
+# ---------------------------------------------------------------------------
+try:
+    from token_budget import TOKEN_BUDGET_ENABLED
+    if TOKEN_BUDGET_ENABLED:
+        from token_budget import router as budget_router, init_budget
+        init_budget(verify_token_dep=verify_token)
+        app.include_router(budget_router, dependencies=[Depends(verify_token)])
+        logger.info("v10 token budget loaded (/budget/*)")
+    else:
+        logger.info("Token budget disabled (TOKEN_BUDGET_ENABLED=false)")
+except Exception as exc:
+    logger.info("v10 token budget not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# v10: Agent Orchestrator
+# ---------------------------------------------------------------------------
+try:
+    from agents import list_agents, AGENT_REGISTRY
+    if os.getenv("AGENT_ORCHESTRATOR_ENABLED", "false").lower() == "true":
+        from agents.orchestrator import OrchestratorAgent
+        logger.info("v10 agent orchestrator loaded (%d agents registered)", len(AGENT_REGISTRY))
+    else:
+        logger.info("Agent orchestrator disabled (AGENT_ORCHESTRATOR_ENABLED=false)")
+except Exception as exc:
+    logger.info("v10 agent orchestrator not loaded: %s", exc)
 

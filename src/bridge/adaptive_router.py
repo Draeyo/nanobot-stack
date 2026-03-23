@@ -89,14 +89,22 @@ class AdaptiveRouter:
             decay_rounds = int(age_hours / 24)
             entry["avg_score"] = 0.5 + (entry["avg_score"] - 0.5) * (DECAY_FACTOR ** decay_rounds)
 
-    def get_model_ranking(self, task_type: str, candidates: list[str]) -> list[str]:
+    def get_model_ranking(self, task_type: str, candidates: list[str],
+                          budget_pressure: float = 0.0) -> list[str]:
         """Rank candidate models by quality for a task type.
 
         Returns candidates sorted by quality (best first). Models without
         enough samples keep their original order.
+
+        Args:
+            budget_pressure: 0.0 = no pressure, 1.0 = extreme (prefer cheapest).
+                When > 0.5, local models (ollama/*) get a quality score bonus.
+                When > 0.8, local models are always preferred unless task is premium-only.
         """
         if not ADAPTIVE_ROUTING_ENABLED:
             return candidates
+
+        premium_only_tasks = {"code_reasoning", "incident_triage"}
 
         scored = []
         unscored = []
@@ -105,9 +113,20 @@ class AdaptiveRouter:
                 k = self._key(task_type, model)
                 entry = self._scores.get(k)
                 if entry and entry["samples"] >= MIN_SAMPLES:
-                    scored.append((model, entry["avg_score"]))
+                    score = entry["avg_score"]
+                    # Apply local model bonus under budget pressure
+                    if budget_pressure > 0.5 and _is_local_model(model):
+                        score += 0.2 * budget_pressure
+                    scored.append((model, score))
                 else:
                     unscored.append(model)
+
+        # Under extreme budget pressure, force local models first
+        if budget_pressure > 0.8 and task_type not in premium_only_tasks:
+            local = [m for m in candidates if _is_local_model(m)]
+            cloud = [m for m in candidates if not _is_local_model(m)]
+            if local:
+                return local + cloud
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return [m for m, _ in scored] + unscored
@@ -140,6 +159,11 @@ class AdaptiveRouter:
                 "tracked_combinations": len(entries),
                 "entries": sorted(entries, key=lambda x: x["avg_score"], reverse=True)[:20],
             }
+
+
+def _is_local_model(model: str) -> bool:
+    """Check if a model is a local (free) model."""
+    return model.startswith("ollama/") or model.startswith("local_")
 
 
 adaptive_router = AdaptiveRouter()

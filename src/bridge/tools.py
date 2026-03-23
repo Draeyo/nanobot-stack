@@ -1,6 +1,8 @@
 """Dynamic tools: restricted shell, web fetch, notifications.
 
 These are executed server-side by the bridge and exposed via the MCP server.
+Trust engine integration: all tool executions can be gated by configurable
+trust levels (auto, notify_then_execute, approval_required, blocked).
 """
 
 from __future__ import annotations
@@ -14,6 +16,15 @@ from typing import Any
 import httpx
 
 logger = logging.getLogger("rag-bridge.tools")
+
+# Trust engine integration (lazy import to avoid circular deps)
+_trust_engine = None
+
+
+def set_trust_engine(engine) -> None:
+    """Wire the trust engine into tool execution. Called during app init."""
+    global _trust_engine
+    _trust_engine = engine
 
 SHELL_TIMEOUT = int(os.getenv("SHELL_TIMEOUT", "15"))
 WEB_FETCH_TIMEOUT = int(os.getenv("WEB_FETCH_TIMEOUT", "30"))
@@ -67,12 +78,8 @@ def validate_shell_command(cmd: str) -> tuple[bool, str]:
     return False, "unknown allow-list format"
 
 
-def run_shell_command(command: str) -> dict[str, Any]:
-    """Execute a pre-approved read-only shell command."""
-    allowed, reason = validate_shell_command(command)
-    if not allowed:
-        return {"ok": False, "error": f"Command not allowed: {reason}", "command": command}
-
+def _execute_shell(command: str) -> dict[str, Any]:
+    """Internal: actually execute a shell command (no trust check)."""
     try:
         result = subprocess.run(
             command,
@@ -97,10 +104,33 @@ def run_shell_command(command: str) -> dict[str, Any]:
         return {"ok": False, "command": command, "error": "unexpected error running command"}
 
 
+def run_shell_command(command: str) -> dict[str, Any]:
+    """Execute a pre-approved read-only shell command (trust-gated)."""
+    allowed, reason = validate_shell_command(command)
+    if not allowed:
+        return {"ok": False, "error": f"Command not allowed: {reason}", "command": command}
+
+    # Trust engine gate
+    if _trust_engine:
+        return _trust_engine.check_and_execute(
+            "shell_read", command, lambda: _execute_shell(command),
+            description=f"Read-only shell: {command}",
+        )
+
+    return _execute_shell(command)
+
+
 async def web_fetch(url: str) -> dict[str, Any]:
-    """Fetch a web page and extract text content."""
+    """Fetch a web page and extract text content (trust-gated)."""
     if not re.match(r"^https?://", url):
         return {"ok": False, "url": url, "error": "URL must start with http:// or https://"}
+
+    # Trust engine gate (async-compatible: check level only, don't wrap)
+    if _trust_engine:
+        level = _trust_engine.get_trust_level("web_fetch")
+        if level == "blocked":
+            _trust_engine.record_outcome("web_fetch", url, "blocked")
+            return {"ok": False, "url": url, "error": "web_fetch is blocked by trust policy"}
 
     try:
         timeout = httpx.Timeout(WEB_FETCH_TIMEOUT, connect=10.0)
@@ -130,7 +160,14 @@ async def web_fetch(url: str) -> dict[str, Any]:
 
 
 async def send_notification(message: str, title: str = "nanobot", level: str = "info") -> dict[str, Any]:
-    """Send a notification via webhook (supports generic JSON webhook, Telegram-style, ntfy-style)."""
+    """Send a notification via webhook (trust-gated)."""
+    # Trust engine gate
+    if _trust_engine:
+        trust_level = _trust_engine.get_trust_level("notify")
+        if trust_level == "blocked":
+            _trust_engine.record_outcome("notify", message[:100], "blocked")
+            return {"ok": False, "error": "notifications blocked by trust policy"}
+
     webhook_url = NOTIFICATION_WEBHOOK_URL
     if not webhook_url:
         return {"ok": False, "error": "NOTIFICATION_WEBHOOK_URL not configured"}

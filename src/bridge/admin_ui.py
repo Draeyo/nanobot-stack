@@ -730,6 +730,172 @@ SECTION_CONFIG = """
 """
 
 # ---------------------------------------------------------------------------
+# Section: Trust Policies (v10)
+# ---------------------------------------------------------------------------
+SECTION_TRUST = """
+<section x-show="tab==='trust'" x-cloak>
+  <h2 class="mb-12">Trust Policies</h2>
+  <div class="card mb-12">
+    <h3>Action Trust Levels</h3>
+    <p class="text-xs text-muted mb-8">Configure how much autonomy the assistant has per action type. Changes take effect immediately.</p>
+    <table class="tbl">
+      <tr><th>Action Type</th><th>Trust Level</th><th>Successes</th><th>Failures</th><th>Actions</th></tr>
+      <template x-for="p in trustPolicies" :key="p.action_type">
+        <tr>
+          <td x-text="p.action_type"></td>
+          <td>
+            <select :value="p.trust_level" @change="updateTrust(p.action_type,$event.target.value)" class="input" style="width:180px">
+              <option value="auto">Auto</option>
+              <option value="notify_then_execute">Notify then execute</option>
+              <option value="approval_required">Approval required</option>
+              <option value="blocked">Blocked</option>
+            </select>
+          </td>
+          <td><span class="badge badge-green" x-text="p.successful_executions"></span></td>
+          <td><span class="badge badge-red" x-text="p.failed_executions"></span></td>
+          <td><button class="btn btn-blue btn-sm" @click="promoteTrust(p.action_type)">Promote</button></td>
+        </tr>
+      </template>
+    </table>
+  </div>
+  <div class="card">
+    <h3>Trust Audit Log</h3>
+    <table class="tbl">
+      <tr><th>Time</th><th>Action</th><th>Detail</th><th>Level</th><th>Outcome</th></tr>
+      <template x-for="a in trustAudit" :key="a.id">
+        <tr>
+          <td class="text-xs" x-text="a.created_at?.substring(0,19)"></td>
+          <td x-text="a.action_type"></td>
+          <td class="text-xs" x-text="a.action_detail?.substring(0,60)"></td>
+          <td><span class="badge badge-blue" x-text="a.trust_level"></span></td>
+          <td><span :class="'badge badge-'+(a.outcome==='auto_executed'||a.outcome==='success'?'green':a.outcome==='blocked'?'red':'yellow')" x-text="a.outcome"></span></td>
+        </tr>
+      </template>
+    </table>
+  </div>
+</section>
+"""
+
+# ---------------------------------------------------------------------------
+# Section: Costs Dashboard (v10)
+# ---------------------------------------------------------------------------
+SECTION_COSTS = """
+<section x-show="tab==='costs'" x-cloak>
+  <h2 class="mb-12">Cost Dashboard</h2>
+  <div class="grid">
+    <div class="card">
+      <h3>Daily Budget</h3>
+      <template x-if="costData">
+        <div>
+          <div class="stat-value" x-text="'$'+(costData.daily_cost_used_cents/100).toFixed(2)+' / $'+(costData.daily_cost_budget_cents/100).toFixed(2)"></div>
+          <div class="stat-label">Usage</div>
+          <div class="mt-8" style="background:var(--border);border-radius:4px;height:8px;overflow:hidden">
+            <div style="height:100%;border-radius:4px;transition:width .3s"
+              :style="'width:'+Math.min(100,costData.usage_percent)+'%;background:var(--'+(costData.usage_percent>80?'red':costData.usage_percent>50?'yellow':'green')+')'"></div>
+          </div>
+          <div class="text-xs text-muted mt-4" x-text="costData.daily_tokens_used?.toLocaleString()+' / '+costData.daily_tokens_budget?.toLocaleString()+' tokens'"></div>
+        </div>
+      </template>
+    </div>
+    <div class="card">
+      <h3>Budget Pressure</h3>
+      <template x-if="costData">
+        <div>
+          <div class="stat-value" :class="costData.budget_pressure>0.8?'text-red':costData.budget_pressure>0.5?'text-yellow':'text-green'"
+            x-text="(costData.budget_pressure*100).toFixed(0)+'%'"></div>
+          <div class="stat-label" x-text="costData.budget_pressure>0.8?'High \u2014 models may downgrade to Ollama':'Normal'"></div>
+        </div>
+      </template>
+    </div>
+  </div>
+  <div class="card">
+    <h3>Usage by Model (today)</h3>
+    <table class="tbl">
+      <tr><th>Model</th><th>Calls</th><th>Input Tokens</th><th>Output Tokens</th><th>Est. Cost</th></tr>
+      <template x-for="m in costByModel" :key="m.model">
+        <tr>
+          <td x-text="m.model"></td>
+          <td x-text="m.calls"></td>
+          <td x-text="m.input_tokens?.toLocaleString()"></td>
+          <td x-text="m.output_tokens?.toLocaleString()"></td>
+          <td x-text="'$'+(m.cost_cents/100).toFixed(3)"></td>
+        </tr>
+      </template>
+    </table>
+  </div>
+</section>
+"""
+
+# ---------------------------------------------------------------------------
+# Section: Procedural Workflows (v10)
+# ---------------------------------------------------------------------------
+SECTION_WORKFLOWS = """
+<section x-show="tab==='workflows'" x-cloak>
+  <h2 class="mb-12">Procedural Workflows</h2>
+  <p class="text-xs text-muted mb-12">Workflows learned from repeated action patterns. Enable with PROCEDURAL_MEMORY_ENABLED=true.</p>
+  <div class="card">
+    <table class="tbl">
+      <tr><th>Trigger</th><th>Steps</th><th>Freq</th><th>Confidence</th><th>Auto-suggest</th><th>Last Seen</th></tr>
+      <template x-for="w in workflows" :key="w.id">
+        <tr>
+          <td x-text="w.trigger_pattern"></td>
+          <td x-text="JSON.parse(w.steps_json||'[]').length"></td>
+          <td><span class="badge badge-blue" x-text="w.frequency"></span></td>
+          <td><span :class="'badge badge-'+(w.confidence>=0.7?'green':w.confidence>=0.4?'yellow':'red')" x-text="(w.confidence*100).toFixed(0)+'%'"></span></td>
+          <td>
+            <button class="btn btn-sm" :class="w.auto_suggest?'btn-green':'btn-default'"
+              @click="toggleWorkflow(w.id,!w.auto_suggest)" x-text="w.auto_suggest?'On':'Off'"></button>
+          </td>
+          <td class="text-xs" x-text="w.last_observed?.substring(0,10)"></td>
+        </tr>
+      </template>
+      <template x-if="!workflows?.length">
+        <tr><td colspan="6" class="text-muted text-center">No workflows learned yet</td></tr>
+      </template>
+    </table>
+  </div>
+</section>
+"""
+
+# ---------------------------------------------------------------------------
+# Section: Agent Status (v10)
+# ---------------------------------------------------------------------------
+SECTION_AGENTS = """
+<section x-show="tab==='agents'" x-cloak>
+  <h2 class="mb-12">Agent Status</h2>
+  <div class="grid">
+    <template x-for="a in agentList" :key="a.name">
+      <div class="card">
+        <h3 x-text="a.name"></h3>
+        <p class="text-xs text-muted" x-text="a.description"></p>
+      </div>
+    </template>
+    <template x-if="!agentList?.length">
+      <div class="card"><p class="text-muted">No agents registered. Enable with AGENT_ORCHESTRATOR_ENABLED=true.</p></div>
+    </template>
+  </div>
+  <div class="card mt-12">
+    <h3>Recent Executions</h3>
+    <table class="tbl">
+      <tr><th>Time</th><th>Agent</th><th>Task</th><th>Status</th><th>Tokens</th></tr>
+      <template x-for="e in agentHistory" :key="e.id">
+        <tr>
+          <td class="text-xs" x-text="e.timestamp?.substring(0,19)"></td>
+          <td x-text="e.agent"></td>
+          <td class="text-xs" x-text="e.task?.substring(0,80)"></td>
+          <td><span :class="'badge badge-'+(e.status==='completed'?'green':'red')" x-text="e.status"></span></td>
+          <td x-text="e.tokens?.toLocaleString()"></td>
+        </tr>
+      </template>
+      <template x-if="!agentHistory?.length">
+        <tr><td colspan="5" class="text-muted text-center">No agent executions yet</td></tr>
+      </template>
+    </table>
+  </div>
+</section>
+"""
+
+# ---------------------------------------------------------------------------
 # Section: Advanced
 # ---------------------------------------------------------------------------
 SECTION_ADVANCED = """
@@ -835,7 +1001,9 @@ function adminApp(){return{
     {id:'tools',label:'Tools'},{id:'vectordb',label:'Vector DB'},
     {id:'logs',label:'Logs'},{id:'chat',label:'Chat'},
     {id:'channels',label:'Channels'},{id:'shell',label:'Shell'},
-    {id:'config',label:'Config'},{id:'advanced',label:'Advanced'}
+    {id:'config',label:'Config'},{id:'trust',label:'Trust'},
+    {id:'costs',label:'Costs'},{id:'workflows',label:'Workflows'},
+    {id:'agents',label:'Agents'},{id:'advanced',label:'Advanced'}
   ],
   tab:location.hash.slice(1)||'analytics',
   token:localStorage.getItem('bt')||'',
@@ -872,6 +1040,18 @@ function adminApp(){return{
   // --- Config ---
   pendingConfigs:[],configHistory:[],diffPreview:'',
 
+  // --- Trust (v10) ---
+  trustPolicies:[],trustAudit:[],
+
+  // --- Costs (v10) ---
+  costData:null,costByModel:[],
+
+  // --- Workflows (v10) ---
+  workflows:[],
+
+  // --- Agents (v10) ---
+  agentList:[],agentHistory:[],
+
   // --- Advanced ---
   kgQuery:'',kgResult:null,piiText:'',piiResult:null,explainQuery:'',explainResult:null,
 
@@ -904,6 +1084,10 @@ function adminApp(){return{
         case'channels':await this.loadChannels();break;
         case'shell':await this.loadShell();break;
         case'config':await this.loadConfig();break;
+        case'trust':await this.loadTrust();break;
+        case'costs':await this.loadCosts();break;
+        case'workflows':await this.loadWorkflows();break;
+        case'agents':await this.loadAgents();break;
         case'advanced':if(!this.analytics.kg)await this.loadAnalytics();break;
       }
     }catch(e){console.error('loadTab error:',e)}
@@ -1106,7 +1290,32 @@ function adminApp(){return{
   async scanPII(){if(!this.piiText)return;
     try{this.piiResult=await this.api('/pii-check',{method:'POST',body:{text:this.piiText}})}catch(e){console.error(e)}},
   async runExplain(){if(!this.explainQuery)return;
-    try{this.explainResult=await this.api('/explain',{method:'POST',body:{query:this.explainQuery}})}catch(e){console.error(e)}}
+    try{this.explainResult=await this.api('/explain',{method:'POST',body:{query:this.explainQuery}})}catch(e){console.error(e)}},
+
+  // === Trust (v10) ===
+  async loadTrust(){
+    try{const[p,a]=await Promise.all([this.api('/trust/policies'),this.api('/trust/audit?limit=50')]);
+      this.trustPolicies=p.policies||[];this.trustAudit=a.entries||[]}catch(e){console.error('loadTrust:',e)}},
+  async updateTrust(type,level){
+    try{await this.api('/trust/policies/'+type,{method:'POST',body:{trust_level:level}});await this.loadTrust()}catch(e){alert('Error: '+e.message)}},
+  async promoteTrust(type){
+    try{await this.api('/trust/promote/'+type,{method:'POST',body:{}});await this.loadTrust()}catch(e){alert('Error: '+e.message)}},
+
+  // === Costs (v10) ===
+  async loadCosts(){
+    try{const[b,r]=await Promise.all([this.api('/budget/status'),this.api('/budget/daily-report')]);
+      this.costData=b;this.costByModel=r.by_model||[]}catch(e){console.error('loadCosts:',e)}},
+
+  // === Workflows (v10) ===
+  async loadWorkflows(){
+    try{const d=await this.api('/workflows');this.workflows=d.workflows||[]}catch(e){console.error('loadWorkflows:',e)}},
+  async toggleWorkflow(id,enabled){
+    try{await this.api('/workflows/'+id+'/toggle',{method:'POST',body:{auto_suggest:enabled}});await this.loadWorkflows()}catch(e){alert('Error: '+e.message)}},
+
+  // === Agents (v10) ===
+  async loadAgents(){
+    try{const[s,h]=await Promise.all([this.api('/agent/status'),this.api('/agent/history')]);
+      this.agentList=s.agents||[];this.agentHistory=h.executions||[]}catch(e){console.error('loadAgents:',e)}}
 }}
 """
 
@@ -1135,6 +1344,10 @@ def build_admin_html() -> str:
 {SECTION_CHANNELS}
 {SECTION_SHELL}
 {SECTION_CONFIG}
+{SECTION_TRUST}
+{SECTION_COSTS}
+{SECTION_WORKFLOWS}
+{SECTION_AGENTS}
 {SECTION_ADVANCED}
 </main>
 <script>{ADMIN_JS}</script>

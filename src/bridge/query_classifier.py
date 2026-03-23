@@ -17,12 +17,18 @@ Return ONLY a JSON object: {"task_type": "<category>", "needs_retrieval": true/f
 Categories:
 - memory_lookup: asks about something discussed before, a preference, a past decision
 - factual_question: asks a factual question answerable from documents/runbooks
-- code_task: write, review, debug, or explain code
+- code_write: write new code, implement a feature, generate a script
+- code_review: review, debug, or fix existing code
+- code_explain: explain how code works, what it does
 - incident_triage: reports an issue, outage, error, or alert
+- ops_query: asks about server status, resource usage, infrastructure info
+- ops_action: requests server maintenance, restart, update, configuration change
 - creative_writing: write prose, draft an email, summarise
 - translation: translate text between languages
 - structured_extraction: extract data, parse, convert formats
 - planning: plan, organise, decompose a task
+- web_research: find information online, look up documentation
+- notification: send a message, reminder, or alert
 - general_chat: casual conversation, greetings, opinions, anything else
 
 needs_retrieval: true if answering likely requires documents, memories, or past conversations."""
@@ -30,12 +36,19 @@ needs_retrieval: true if answering likely requires documents, memories, or past 
 TASK_TYPE_MAP = {
     "memory_lookup": "retrieval_answer",
     "factual_question": "retrieval_answer",
-    "code_task": "code_reasoning",
+    "code_write": "code_reasoning",
+    "code_review": "code_reasoning",
+    "code_explain": "code_reasoning",
+    "code_task": "code_reasoning",  # backward compat
     "incident_triage": "incident_triage",
+    "ops_query": "incident_triage",
+    "ops_action": "tool_planning",
     "creative_writing": "rewrite_polish",
     "translation": "translation",
     "structured_extraction": "structured_extraction",
     "planning": "tool_planning",
+    "web_research": "retrieval_answer",
+    "notification": "fallback_general",
     "general_chat": "fallback_general",
 }
 

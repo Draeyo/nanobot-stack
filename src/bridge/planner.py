@@ -13,6 +13,15 @@ logger = logging.getLogger("rag-bridge.planner")
 PLANNER_ENABLED = os.getenv("PLANNER_ENABLED", "true").lower() == "true"
 MAX_PARALLEL_WORKERS = int(os.getenv("PLANNER_MAX_WORKERS", "4"))
 
+# Procedural memory integration (set during app init)
+_procedural_memory = None
+
+
+def set_procedural_memory(pm_module) -> None:
+    """Wire procedural memory for action logging."""
+    global _procedural_memory
+    _procedural_memory = pm_module
+
 PLAN_PROMPT = """You are a task planner. Decompose the user's request into sequential steps.
 Each step should be a concrete, actionable task.
 
@@ -81,27 +90,27 @@ def execute_step(step: dict[str, Any], step_results: dict[int, Any],
     try:
         if action == "search_memory" and search_fn:
             result = search_fn(full_input)
-            return {"status": "ok", "action": action, "result": result}
+            output = {"status": "ok", "action": action, "result": result}
 
         elif action == "ask_rag" and ask_fn:
             result = ask_fn(full_input)
-            return {"status": "ok", "action": action, "result": result}
+            output = {"status": "ok", "action": action, "result": result}
 
         elif action == "run_command" and shell_fn:
             result = shell_fn(full_input)
-            return {"status": "ok", "action": action, "result": result}
+            output = {"status": "ok", "action": action, "result": result}
 
         elif action == "web_fetch" and web_fn:
             result = web_fn(full_input)
-            return {"status": "ok", "action": action, "result": result}
+            output = {"status": "ok", "action": action, "result": result}
 
         elif action == "remember" and remember_fn:
             result = remember_fn(full_input)
-            return {"status": "ok", "action": action, "result": result}
+            output = {"status": "ok", "action": action, "result": result}
 
         elif action == "notify" and notify_fn:
             result = notify_fn(full_input)
-            return {"status": "ok", "action": action, "result": result}
+            output = {"status": "ok", "action": action, "result": result}
 
         else:
             # Default: generate_text
@@ -109,11 +118,37 @@ def execute_step(step: dict[str, Any], step_results: dict[int, Any],
                 {"role": "system", "content": f"Task: {description}"},
                 {"role": "user", "content": full_input[:4000]},
             ], max_tokens=1800)
-            return {"status": "ok", "action": "generate_text", "result": result["text"]}
+            output = {"status": "ok", "action": "generate_text", "result": result["text"]}
+
+        # Log to procedural memory
+        if _procedural_memory:
+            try:
+                _procedural_memory.log_action(
+                    session_id="planner",
+                    action=action,
+                    params={"input": step_input[:200], "description": description},
+                    result_summary=str(output.get("result", ""))[:500],
+                )
+            except Exception:
+                pass
+
+        return output
 
     except Exception as exc:
         logger.warning("Step execution failed (%s): %s", action, exc)
-        return {"status": "error", "action": action, "error": str(exc)}
+        result_dict = {"status": "error", "action": action, "error": str(exc)}
+        # Log to procedural memory even on failure
+        if _procedural_memory:
+            try:
+                _procedural_memory.log_action(
+                    session_id="planner",
+                    action=action,
+                    params={"input": step_input[:200], "description": description},
+                    result_summary=f"error: {exc}",
+                )
+            except Exception:
+                pass
+        return result_dict
 
 
 def execute_plan(plan: dict[str, Any], run_chat_fn, **tool_fns) -> dict[str, Any]:

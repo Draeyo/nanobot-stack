@@ -146,6 +146,34 @@ _SETTINGS: list[SettingDef] = [
     SettingDef("OLLAMA_API_KEY", "ollama", "Ollama API key", "ollama", sensitive=True),
     SettingDef("OLLAMA_CHAT_MODEL", "qwen2.5:7b", "Ollama chat model", "ollama"),
     SettingDef("OLLAMA_EMBED_MODEL", "nomic-embed-text", "Ollama embedding model", "ollama"),
+
+    # --- Trust Engine (v10) ---
+    SettingDef("TRUST_ENGINE_ENABLED", "true", "Enable per-action trust level gating", "trust", choices=["true", "false"]),
+    SettingDef("TRUST_DEFAULT_LEVEL", "approval_required", "Default trust level for unconfigured actions",
+               "trust", choices=["auto", "notify_then_execute", "approval_required", "blocked"]),
+    SettingDef("TRUST_AUTO_PROMOTE_THRESHOLD", "20", "Consecutive successes before auto-promoting trust level", "trust"),
+    SettingDef("TRUST_NOTIFY_CHANNEL", "", "Webhook URL for trust notifications", "trust"),
+    SettingDef("TRUST_ROLLBACK_WINDOW_HOURS", "24", "Hours within which rollback is available", "trust"),
+
+    # --- Procedural Memory (v10) ---
+    SettingDef("PROCEDURAL_MEMORY_ENABLED", "false", "Enable workflow learning from action patterns", "procedural_memory", choices=["true", "false"]),
+    SettingDef("PROCEDURAL_DETECT_THRESHOLD", "10", "Minimum new actions before pattern detection runs", "procedural_memory"),
+    SettingDef("PROCEDURAL_SCAN_WINDOW", "100", "Max actions to scan for patterns", "procedural_memory"),
+    SettingDef("PROCEDURAL_SUGGEST_CONFIDENCE", "0.7", "Minimum confidence to suggest a workflow", "procedural_memory"),
+
+    # --- Agent Orchestrator (v10) ---
+    SettingDef("AGENT_ORCHESTRATOR_ENABLED", "false", "Enable multi-agent orchestration", "agents", choices=["true", "false"]),
+
+    # --- Semantic Cache (v10) ---
+    SettingDef("SEMANTIC_CACHE_ENABLED", "false", "Enable vector-similarity LLM response cache", "semantic_cache", choices=["true", "false"]),
+    SettingDef("SEMANTIC_CACHE_THRESHOLD", "0.92", "Cosine similarity threshold for cache hits", "semantic_cache"),
+    SettingDef("SEMANTIC_CACHE_TTL", "86400", "Cache TTL in seconds (default 24h)", "semantic_cache"),
+    SettingDef("SEMANTIC_CACHE_MAX_SIZE", "1000", "Max entries in semantic cache", "semantic_cache"),
+
+    # --- Token Budget (v10) ---
+    SettingDef("TOKEN_BUDGET_ENABLED", "false", "Enable token/cost budget tracking", "token_budget", choices=["true", "false"]),
+    SettingDef("DAILY_TOKEN_BUDGET", "5000000", "Daily token budget (default 5M)", "token_budget"),
+    SettingDef("DAILY_COST_BUDGET_CENTS", "300", "Daily cost budget in cents (default $3)", "token_budget"),
 ]
 
 _SETTINGS_BY_KEY: dict[str, SettingDef] = {s.key: s for s in _SETTINGS}
