@@ -48,7 +48,7 @@ class AdaptiveRouter:
     def _key(self, task_type: str, model: str) -> str:
         return f"{task_type}|{model}"
 
-    def record_quality(self, task_type: str, model: str, score: float, source: str = "feedback") -> None:
+    def record_quality(self, task_type: str, model: str, score: float, source: str = "feedback") -> None:  # pylint: disable=unused-argument
         """Record a quality signal for a model on a task type.
 
         Args:

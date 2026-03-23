@@ -166,7 +166,7 @@ def extract_and_store(text: str, run_chat_fn) -> dict[str, Any]:
     return {"stored": True, "entities": stored_entities, "relations": stored_relations}
 
 
-def query_entity(name: str, depth: int = 1) -> dict[str, Any]:
+def query_entity(name: str, depth: int = 1) -> dict[str, Any]:  # pylint: disable=unused-argument
     """Query the graph for an entity and its relationships."""
     if not KG_ENABLED:
         return {"found": False, "reason": "knowledge graph disabled"}
@@ -375,7 +375,7 @@ def get_stats() -> dict[str, Any]:
                 "entity_types": type_counts,
                 "top_entities": [{"name": e[0], "type": e[1], "mentions": e[2]} for e in top_entities],
             }
-        except Exception as exc:
+        except Exception:
             return {"enabled": True, "error": "stats query failed"}
         finally:
             db.close()

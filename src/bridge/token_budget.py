@@ -156,7 +156,7 @@ def record_usage(
     }
 
 
-def check_budget(session_id: str = "") -> dict[str, Any]:
+def check_budget(session_id: str = "") -> dict[str, Any]:  # pylint: disable=unused-argument
     """Check remaining budget.
 
     Returns a dict with ``ok``, token/cost totals, ``usage_percent``, and

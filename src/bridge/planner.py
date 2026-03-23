@@ -231,7 +231,7 @@ def execute_plan_parallel(plan: dict[str, Any], run_chat_fn, **tool_fns) -> dict
                     step = futures[future]
                     try:
                         output = future.result()
-                    except Exception as exc:
+                    except Exception:
                         output = {"status": "error", "action": step.get("action"), "error": "parallel step failed"}
                     results[step["id"]] = output.get("result", output.get("error", ""))
                     step_outputs.append({"step": step, "output": output})

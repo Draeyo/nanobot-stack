@@ -205,8 +205,8 @@ _router_cache: dict[str, Any] = {"mtime": 0.0, "data": {}}
 def load_router() -> dict[str, Any]:
     try:
         mt = MODEL_ROUTER_FILE.stat().st_mtime
-    except FileNotFoundError:
-        raise RuntimeError(f"Model router file not found: {MODEL_ROUTER_FILE}")
+    except FileNotFoundError as exc:
+        raise RuntimeError(f"Model router file not found: {MODEL_ROUTER_FILE}") from exc
     if mt != _router_cache["mtime"]:
         _router_cache["data"] = json.loads(MODEL_ROUTER_FILE.read_text(encoding="utf-8"))
         _router_cache["mtime"] = mt
@@ -1400,9 +1400,9 @@ except Exception as exc:
 # v10: Agent Orchestrator
 # ---------------------------------------------------------------------------
 try:
-    from agents import list_agents, AGENT_REGISTRY
+    from agents import AGENT_REGISTRY
     if os.getenv("AGENT_ORCHESTRATOR_ENABLED", "false").lower() == "true":
-        from agents.orchestrator import OrchestratorAgent
+        import agents.orchestrator  # pylint: disable=unused-import,import-outside-toplevel
         logger.info("v10 agent orchestrator loaded (%d agents registered)", len(AGENT_REGISTRY))
     else:
         logger.info("Agent orchestrator disabled (AGENT_ORCHESTRATOR_ENABLED=false)")

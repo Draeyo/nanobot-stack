@@ -288,8 +288,8 @@ def update_setting_endpoint(key: str, body: UpdateSettingIn, request: Request):
     # Route through config writer
     try:
         from config_writer import CONFIG_WRITER_ENABLED, propose_config_change
-    except ImportError:
-        raise HTTPException(status_code=501, detail="Config writer module not available")
+    except ImportError as exc:
+        raise HTTPException(status_code=501, detail="Config writer module not available") from exc
 
     if not CONFIG_WRITER_ENABLED:
         raise HTTPException(status_code=409, detail="Config writer is disabled. "

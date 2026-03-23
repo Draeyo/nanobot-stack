@@ -68,7 +68,7 @@ class AgentBase:
     # Helpers for subclasses
     # ------------------------------------------------------------------
 
-    def _build_system_prompt(self, context: dict[str, Any] | None = None) -> str:
+    def _build_system_prompt(self, context: dict[str, Any] | None = None) -> str:  # pylint: disable=unused-argument
         """Build the agent-specific system prompt. Override for specialisation."""
         return f"You are the {self.name} agent. {self.description}"
 

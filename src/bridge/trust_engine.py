@@ -138,7 +138,6 @@ def check_and_execute(
             return {"ok": False, "error": "action execution failed"}
 
     level = get_trust_level(action_type)
-    now = datetime.now(timezone.utc).isoformat()
 
     if level == "blocked":
         _record_audit(action_type, action_detail, level, "blocked")
@@ -220,6 +219,9 @@ def record_outcome(
 ) -> None:
     """Record success/failure and check auto-promotion threshold."""
     now = datetime.now(timezone.utc).isoformat()
+
+    # Record in audit trail
+    _record_audit(action_type, action_detail, get_trust_level(action_type), outcome, rollback_info)
 
     with _lock:
         db = _init_db()
