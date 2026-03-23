@@ -10,6 +10,8 @@
   <a href="#prerequisites">Prerequisites</a> •
   <a href="#installation">Installation</a> •
   <a href="#configuration">Configuration</a> •
+  <a href="#authentik-setup">Authentik Setup</a> •
+  <a href="#admin-ui">Admin UI</a> •
   <a href="#usage">Usage</a> •
   <a href="#faq">FAQ</a> •
   <a href="#contributing">Contributing</a>
@@ -22,10 +24,11 @@
 **nanobot-stack** is a one-command deployment script that sets up a complete, self-hosted AI assistant on your own server. Think of it as your private AI that:
 
 - **Remembers everything** — It stores facts, decisions, and conversations in a vector database and recalls them automatically when relevant.
-- **Routes to the best model** — It picks the cheapest model that can handle each task (a quick rewrite doesn't need GPT-4) and falls back to alternatives if one provider is down.
-- **Uses tools** — It can run shell commands, fetch web pages, send notifications, and execute multi-step plans.
+- **Routes to the best model** — It picks the cheapest model that can handle each task (a quick rewrite doesn't need GPT-4) and falls back to alternatives if one provider is down. An adaptive router learns from feedback to improve routing over time.
+- **Uses tools** — It can run shell commands, fetch web pages, send notifications, execute code in a sandbox, and run multi-step plans with parallel execution.
+- **Understands context deeply** — HyDE query rewriting, knowledge graph relationships, sentiment detection, inline citations, and self-critique produce higher-quality answers.
 - **Works offline** — An optional local model (Ollama) keeps things running when your internet connection drops.
-- **Stays private** — Everything runs on your hardware. Your conversations and data never leave your server.
+- **Stays private** — Everything runs on your hardware. PII is automatically detected and redacted. Your conversations and data never leave your server.
 
 It bundles together several open-source projects into a cohesive stack:
 
@@ -57,25 +60,33 @@ Internet
   └────┬────┘  └─┬───┬───┬─┘  └──────────┘
        │  MCP    │   │   │
        └─────────┘   │   ├──► Restricted shell
+                     │   ├──► Code interpreter (sandbox)
                      │   ├──► Web fetcher
-                     │   └──► Webhook notifications
+                     │   ├──► Webhook notifications
+                     │   └──► Plugin system
                      ▼
-              ┌────────────┐    ┌─────────┐
-              │  Qdrant    │    │ Ollama  │
-              │  (vector   │    │ (local  │
-              │  database) │    │ models) │
-              └────────────┘    └─────────┘
+   ┌──────────┐ ┌────────────┐ ┌─────────┐
+   │Knowledge │ │  Qdrant    │ │ Ollama  │
+   │  Graph   │ │  (vector   │ │ (local  │
+   │ (SQLite) │ │  database) │ │ models) │
+   └──────────┘ └────────────┘ └─────────┘
 ```
 
 **How a question flows through the stack:**
 
 1. You ask a question via the web UI or API.
-2. The **RAG bridge** classifies your question (is it a memory lookup? a coding task? an incident?).
-3. It searches **Qdrant** for relevant memories and documents.
-4. It injects the found context + your user profile into the prompt.
-5. It picks the best model for the job (cheap for simple tasks, premium for complex ones).
-6. If all cloud providers are down, it falls back to **Ollama** running locally.
-7. The answer streams back to you in real time, with the agent narrating each step.
+2. **Working memory** tracks your session context (recent queries, topics, retrieved chunks).
+3. **Sentiment detection** identifies tone and urgency to adapt the response style.
+4. The **RAG bridge** classifies your question (memory lookup? coding task? incident?).
+5. **HyDE rewriting** generates a hypothetical answer passage for better vector retrieval.
+6. Long conversations are **compressed** (summarized) to fit within context limits.
+7. It searches **Qdrant** for relevant memories/documents and **deduplicates** by embedding similarity.
+8. **Knowledge graph** lookups add entity relationships to the context.
+9. It injects context + your **user profile** + **inline citation instructions** into the prompt.
+10. The **adaptive router** picks the best model, learning from feedback over time.
+11. If all cloud providers are down, it falls back to **Ollama** running locally.
+12. A **self-critique** pass reviews the answer for accuracy before delivery.
+13. The answer streams back in real time via **SSE**, with progress events for each step.
 
 ## Features
 
@@ -94,6 +105,7 @@ Internet
 
 - 22 model profiles across OpenAI, Anthropic, OpenRouter, and Ollama
 - Automatic task classification: a quick rewrite uses gpt-4.1-mini ($), while an architecture decision uses Claude Sonnet ($$)
+- **Adaptive routing**: learns from feedback to prefer higher-quality models per task type
 - Fallback chains with circuit breakers: if OpenAI is down, it tries Anthropic, then OpenRouter, then local Ollama
 - Hot-reloadable config: edit `model_router.json` without restarting
 - Gracefully skips providers whose API keys aren't configured
@@ -104,8 +116,24 @@ Internet
 
 - **Restricted shell**: pre-approved read-only commands (systemctl status, journalctl, curl, dig, df…)
 - **Web fetcher**: fetch and extract text from any URL
+- **Code interpreter**: sandboxed Python execution for calculations, data processing, string manipulation
 - **Notifications**: send alerts via webhook (ntfy.sh, Slack, Telegram)
-- **Multi-step planner**: decomposes complex tasks into steps and executes them sequentially
+- **Multi-step planner**: decomposes complex tasks into steps with parallel execution of independent steps
+- **Plugin system**: drop Python files into a plugins directory — hot-reloaded with `@tool` and `@hook` decorators
+</details>
+
+<details>
+<summary><strong>Advanced RAG pipeline</strong> — Beyond basic search</summary>
+
+- **HyDE query rewriting**: generates a hypothetical answer passage and uses its embedding for more precise retrieval
+- **Semantic chunking**: embedding-based boundary detection for smarter document splitting
+- **Knowledge graph**: SQLite-backed entity/relationship graph (people, projects, technologies, decisions)
+- **Inline citations**: automatic [1], [2] references with a source list at the end
+- **Self-critique**: post-generation review pass that catches errors and improves answer quality
+- **Sentiment detection**: adapts response tone based on user urgency and emotion
+- **Memory decay**: time and access-based scoring so recent/frequent memories rank higher
+- **Working memory**: per-session context tracking (query history, seen chunks, active topics)
+- **Context compression**: long conversations are summarized to fit within model context limits
 </details>
 
 <details>
@@ -121,6 +149,7 @@ Internet
 
 - Langfuse tracing on all LLM calls (cost, latency, token usage)
 - Prometheus metrics at `/metrics`
+- **Admin UI** at `/admin` — unified management console with 10 sections (analytics, settings, tools, vector DB, logs, chat, channels, shell, config, advanced)
 - Real-time HTML dashboard at `/dashboard`
 - Structured JSON logging for SIEM integration
 - Append-only audit log (who called what, when)
@@ -130,12 +159,23 @@ Internet
 <summary><strong>Security</strong> — Production-grade hardening</summary>
 
 - All services bind to localhost (127.0.0.1) — public access only through Traefik
-- Authentication via Authentik ForwardAuth
-- Bearer token on all internal bridge endpoints
+- Authentication via Authentik ForwardAuth (SSO) + per-request bridge token
+- **DM pairing gate**: channel users (Telegram, Discord, WhatsApp) must be approved by the admin before interacting
+- **PII auto-detection**: emails, phones, SSNs, API keys, credit cards scanned and redacted before storage
+- **Approval-gated shell**: system-modifying commands require explicit user approval before execution
+- **Approval-gated config**: configuration changes are validated, staged, diffed, and reviewed before applying
 - Qdrant API key protection
 - systemd hardening (NoNewPrivileges, ProtectSystem=strict…)
 - Secret rotation script with orderly restarts
 - No secrets in the Git repository
+</details>
+
+<details>
+<summary><strong>Transparency & export</strong> — Understand and archive</summary>
+
+- **Pipeline explain mode**: see exactly how your answer was produced (classification, routing, retrieval scores, timing)
+- **Conversation export**: save chats as Markdown or structured JSON
+- **SSE streaming**: real-time progress events for every pipeline phase
 </details>
 
 ## Prerequisites
@@ -297,7 +337,8 @@ nanobot-stack-selftest
 curl -s http://127.0.0.1:8089/healthz | jq .
 
 # Or open in your browser:
-# https://rag.yourdomain.com/dashboard?token=YOUR_BRIDGE_TOKEN
+# https://rag.yourdomain.com/admin              (full admin console)
+# https://rag.yourdomain.com/dashboard?token=TOKEN  (legacy analytics)
 ```
 
 You can find your bridge token in:
@@ -342,6 +383,252 @@ See [`stack.env.example`](stack.env.example) for every available option with doc
 | `src/bridge/*.py` | ✅ | RAG bridge source code |
 | `/opt/nanobot-stack/rag-bridge/.env` | ❌ (on server) | API keys and secrets |
 | `/opt/nanobot-stack/nanobot/config/.env` | ❌ (on server) | Agent API keys |
+
+## Authentik setup
+
+nanobot-stack uses [Authentik](https://goauthentik.io/) as its SSO provider via Traefik's ForwardAuth middleware. Every HTTP request to your public subdomains is verified by Authentik before reaching the backend services. This section walks you through the full integration.
+
+### Prerequisites
+
+You need a running Authentik instance accessible at a public FQDN (e.g. `auth.yourdomain.com`). If you don't have one yet, follow the [Authentik install docs](https://docs.goauthentik.io/docs/install-config/).
+
+### Step 1 — Create a Proxy Provider in Authentik
+
+1. Log into your Authentik admin interface (`https://auth.yourdomain.com/if/admin/`).
+2. Navigate to **Applications → Providers → Create**.
+3. Select **Proxy Provider** and configure:
+
+| Field | Value |
+|-------|-------|
+| Name | `nanobot-stack` |
+| Authorization flow | Pick your default or create one |
+| Type | **Forward auth (single application)** |
+| External host | `https://rag.yourdomain.com` |
+
+4. Click **Save**.
+
+> **Note**: If you want a single provider protecting all subdomains (ai, rag, observability, chat), use **Forward auth (domain level)** instead and set the cookie domain to `.yourdomain.com`.
+
+### Step 2 — Create an Application
+
+1. Navigate to **Applications → Applications → Create**.
+2. Configure:
+
+| Field | Value |
+|-------|-------|
+| Name | `nanobot-stack` |
+| Slug | `nanobot-stack` |
+| Provider | Select the **nanobot-stack** proxy provider from step 1 |
+
+3. Click **Save**.
+
+### Step 3 — Create (or reuse) an Outpost
+
+1. Navigate to **Applications → Outposts**.
+2. If you already have a running **Proxy outpost** (embedded or Docker), add the `nanobot-stack` application to it.
+3. If you don't have one:
+   - Click **Create**, select **Proxy** type.
+   - Name it (e.g. `traefik-outpost`).
+   - Add the `nanobot-stack` application.
+   - Choose the integration (Docker or embedded).
+4. Note the outpost's FQDN — this is usually your Authentik server's domain (e.g. `auth.yourdomain.com`).
+
+### Step 4 — Configure nanobot-stack
+
+Set the outpost FQDN in your `stack.env`:
+
+```bash
+# stack.env
+AUTHENTIK_OUTPOST_FQDN="auth.yourdomain.com"
+```
+
+Then deploy (or redeploy) so Traefik picks up the rendered config:
+
+```bash
+sudo ./deploy.sh
+# or, if already deployed:
+sudo ./update.sh
+```
+
+This renders `traefik/authentik-forwardauth.yaml.template` into `/etc/traefik/dynamic/authentik-forwardauth.yaml`, which defines the `authentik-forwardauth` middleware pointing at your outpost.
+
+### How it works
+
+```
+Browser request
+    │
+    ▼
+┌──────────┐     auth subrequest      ┌────────────┐
+│  Traefik │ ──────────────────────►  │  Authentik  │
+│          │ ◄──────────────────────  │  Outpost    │
+│          │   200 OK + user headers  └────────────┘
+│          │   (or 302 redirect to login)
+└────┬─────┘
+     │  X-authentik-username
+     │  X-authentik-email
+     │  X-authentik-groups
+     │  ...
+     ▼
+┌──────────────┐
+│  RAG bridge  │  (also checks X-Bridge-Token)
+│  / nanobot   │
+└──────────────┘
+```
+
+For every incoming request, Traefik sends a subrequest to Authentik. If the user has a valid session, Authentik returns `200 OK` with identity headers (`X-authentik-username`, `X-authentik-email`, `X-authentik-groups`, etc.) which are forwarded to the backend. If not, Authentik returns a `302` redirect to the login page.
+
+### Protected routes
+
+| Subdomain | Route | Protected? |
+|-----------|-------|------------|
+| `ai.yourdomain.com` | nanobot agent | Yes |
+| `rag.yourdomain.com` | RAG bridge (all endpoints including `/admin`) | Yes |
+| `observability.yourdomain.com` | Langfuse tracing dashboard | Yes |
+| `chat.yourdomain.com` | Web UI (optional) | Yes |
+| `rag.yourdomain.com/webhooks/whatsapp` | WhatsApp callback | No (webhooks can't do interactive login) |
+
+### Disabling authentication
+
+For local-only or development setups where you don't want SSO:
+
+1. Remove the middleware reference from `traefik/nanobot-stack.yaml.template`:
+   ```yaml
+   # Remove or comment out this line from each router:
+   middlewares:
+     - authentik-forwardauth
+   ```
+
+2. Delete the middleware file:
+   ```bash
+   sudo rm /etc/traefik/dynamic/authentik-forwardauth.yaml
+   ```
+
+3. Reload Traefik:
+   ```bash
+   sudo systemctl reload traefik
+   ```
+
+The RAG bridge will still require an `X-Bridge-Token` (or `?token=`) on every request — Authentik only adds the SSO login layer on top.
+
+### Restricting access by group
+
+Authentik forwards the user's groups in the `X-authentik-groups` header. You can use this in Authentik's policy engine to restrict the nanobot-stack application to specific groups:
+
+1. In Authentik, go to **Customisation → Policies → Create**.
+2. Create an **Expression Policy** with:
+   ```python
+   return ak_is_group_member(request.user, name="nanobot-admins")
+   ```
+3. Bind this policy to the `nanobot-stack` application.
+
+Only members of the `nanobot-admins` group will be able to access the stack.
+
+---
+
+## Admin UI
+
+The admin UI is a comprehensive web-based console for managing every aspect of the nanobot-stack. It consolidates analytics, settings, tools, vector database, logs, chat, channels, shell, configuration, and advanced features into a single Authentik-protected interface.
+
+### Accessing the admin UI
+
+```
+https://rag.yourdomain.com/admin
+```
+
+On first visit, the UI will prompt you for your **bridge token** (stored in `localStorage` for subsequent visits). Find your token with:
+
+```bash
+cat /opt/nanobot-stack/rag-bridge/.bridge_token
+```
+
+Authentication is dual-layer:
+1. **Authentik SSO** — handled by Traefik before the request reaches the RAG bridge
+2. **Bridge token** — checked by the application on every API call
+
+### Enabling / disabling
+
+The admin UI is enabled by default. To disable it:
+
+```bash
+# In /opt/nanobot-stack/rag-bridge/.env:
+ADMIN_UI_ENABLED=false
+```
+
+Then restart: `sudo systemctl restart nanobot-rag`
+
+### Sections
+
+The admin UI has 10 tabs:
+
+#### 1. Analytics
+
+Real-time system dashboard merged from the legacy `/dashboard`. Shows:
+- Health status, circuit breaker states, cache hit rates, rate limiter state
+- Token usage chart (by model) and cache performance chart
+- Working memory sessions, loaded plugins, model route table
+- Auto-refresh toggle (30s interval)
+
+#### 2. Settings
+
+Centralized view of all ~80 configurable parameters grouped by section (domain, system, network, models, RAG tuning, tools, channels, etc.):
+- Current value (sensitive values are masked), default, description
+- Inline editing: modify a value and click "Propose Change"
+- Changes go through the **Config Writer** approval workflow — they are validated, staged, and diffed before being applied
+- Requires `CONFIG_WRITER_ENABLED=true` for write operations
+
+#### 3. Tools & Routing
+
+- **Plugins**: lists loaded plugins with tool count and hook count
+- **Plugin tools**: expandable list with a "Test" button to invoke any tool with JSON parameters
+- **Model routing**: task → model chain table, route preview form to test classification
+
+#### 4. Vector DB
+
+- **Collections overview**: all Qdrant collections with point counts and status
+- **Search tester**: run a query against selected collections, see results with relevance scores
+- **Collection browser**: scroll through individual points with payload preview
+
+#### 5. Logs
+
+- **Audit log viewer**: timestamps, HTTP methods, paths, status codes, IPs, response times
+- Filters: by method (GET/POST/...), path substring, status range
+- Paginated with configurable limit
+
+#### 6. Chat
+
+- Full chat interface with SSE streaming
+- Pipeline progress sidebar showing each step in real time (classify, HyDE, retrieve, rerank, generate...)
+- Toggle switches: auto-classify, HyDE, citations, self-critique
+- Session ID support for multi-turn conversations
+- Source panel when citations are returned
+
+#### 7. Channels
+
+- **Adapter status cards**: Telegram, Discord, WhatsApp — configured/running/error
+- **DM pairing management**: pending pairing requests with approve/reject buttons
+- **Approved users**: list of all approved channel users with revoke option
+- DM policy indicator (pairing mode vs open mode)
+
+#### 8. Elevated Shell
+
+- **Command allowlist**: reference table of all permitted commands (default + user-added)
+- **Pending actions**: proposed system commands awaiting approval
+- **Action history**: all past actions with status, stdout/stderr, return codes
+- **Propose form**: submit a new command for approval
+
+#### 9. Config Writer
+
+- **Pending changes**: proposed configuration modifications awaiting review
+- **Diff viewer**: syntax-colored unified diff (green = added, red = removed)
+- **Change history**: all past changes with status
+- **Rollback**: one-click rollback for previously applied changes
+
+#### 10. Advanced
+
+- **Knowledge Graph Explorer**: entity search and relation finder
+- **PII Scanner**: paste text to detect and classify personal data
+- **Pipeline Explainer**: run a query and see the full pipeline trace (classification, routing, retrieval, timing)
+- **Working Memory**: session statistics and context tracking
 
 ## Usage
 
@@ -401,7 +688,8 @@ nanobot-rag-ingest
 
 ### Monitoring
 
-- **Dashboard**: `https://rag.yourdomain.com/dashboard?token=TOKEN`
+- **Admin UI**: `https://rag.yourdomain.com/admin` (full management console)
+- **Legacy dashboard**: `https://rag.yourdomain.com/dashboard?token=TOKEN`
 - **Langfuse**: `https://observability.yourdomain.com`
 - **Prometheus metrics**: `http://127.0.0.1:8089/metrics`
 - **Self-test**: `nanobot-stack-selftest`
@@ -437,7 +725,7 @@ The infrastructure itself is free (self-hosted). The only cost is LLM API usage.
 <details>
 <summary><strong>Can I use it without Traefik/Authentik?</strong></summary>
 
-Yes. The core services (nanobot, RAG bridge, Qdrant) work locally on `127.0.0.1` without any reverse proxy. Traefik and Authentik are only needed for public HTTPS access with authentication. For local-only use, you can skip them entirely and access the services directly.
+Yes. The core services (nanobot, RAG bridge, Qdrant) work locally on `127.0.0.1` without any reverse proxy. Traefik and Authentik are only needed for public HTTPS access with authentication. For local-only use, you can skip them entirely and access the services directly (e.g. `http://127.0.0.1:8089/admin`). See the [Authentik Setup](#authentik-setup) section for instructions on disabling the middleware.
 </details>
 
 <details>
@@ -455,7 +743,9 @@ If Ollama is installed (`INSTALL_OLLAMA=true`), the circuit breakers will detect
 <details>
 <summary><strong>Can I add my own tools?</strong></summary>
 
-Yes. Add new Python functions to `src/bridge/tools.py`, expose them in `src/bridge/extensions.py` as endpoints, and add corresponding MCP tool wrappers in `src/mcp/rag_mcp_server.py`. Then run `sudo ./update.sh --code-only`.
+**Option 1 — Plugin system (recommended)**: Drop a Python file into the plugins directory with `@tool` and `@hook` decorators. Plugins are hot-reloaded without restarts.
+
+**Option 2 — Manual**: Add new Python functions to `src/bridge/tools.py`, expose them in `src/bridge/extensions.py` as endpoints, and add corresponding MCP tool wrappers in `src/mcp/rag_mcp_server.py`. Then run `sudo ./update.sh --code-only`.
 </details>
 
 <details>
@@ -537,20 +827,21 @@ df -h /usr/share/ollama
 
 ```
 nanobot-stack/
-├── stack.env.example          # Configuration template
-├── lib.sh                     # Shared functions & defaults
-├── deploy.sh                  # First-time installer
-├── update.sh                  # Fast updater
-├── rotate-secrets.sh          # Secret rotation
+├── .gitignore                    # Excludes secrets, caches, state
+├── stack.env.example             # Configuration template
+├── lib.sh                        # Shared functions & defaults
+├── deploy.sh                     # First-time installer
+├── update.sh                     # Fast updater
+├── rotate-secrets.sh             # Secret rotation
 ├── src/
-│   ├── bridge/                # RAG bridge (16 Python modules)
-│   ├── mcp/                   # MCP server (22 tools for the agent)
-│   └── config/                # Default configs
-├── systemd/                   # Service definitions (.template)
-├── traefik/                   # Reverse proxy config (.template)
-├── scripts/                   # Helper scripts (.template)
+│   ├── bridge/                   # RAG bridge (32 Python modules)
+│   ├── mcp/                      # MCP server (26 tools for the agent)
+│   └── config/                   # Default configs (model_router.json, policy prompt)
+├── systemd/                      # Service definitions (.template)
+├── traefik/                      # Reverse proxy config (.template)
+├── scripts/                      # Helper scripts (.template)
 └── docs/
-    └── REFERENCE.md           # Full API & endpoint reference
+    └── REFERENCE.md              # Full API & endpoint reference
 ```
 
 ## Contributing

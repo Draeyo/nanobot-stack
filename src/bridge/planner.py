@@ -1,15 +1,17 @@
 """Multi-step task planning and execution.
 
 Decomposes complex queries into step-by-step plans and executes each step
-using the appropriate tool/model.
+using the appropriate tool/model. Supports parallel execution of independent steps.
 """
 from __future__ import annotations
+import concurrent.futures
 import json, logging, os, uuid
 from datetime import datetime, timezone
 from typing import Any
 
 logger = logging.getLogger("rag-bridge.planner")
 PLANNER_ENABLED = os.getenv("PLANNER_ENABLED", "true").lower() == "true"
+MAX_PARALLEL_WORKERS = int(os.getenv("PLANNER_MAX_WORKERS", "4"))
 
 PLAN_PROMPT = """You are a task planner. Decompose the user's request into sequential steps.
 Each step should be a concrete, actionable task.
@@ -18,7 +20,7 @@ Return ONLY JSON:
 {
   "goal": "one-line description of the overall goal",
   "steps": [
-    {"id": 1, "action": "search_memory|ask_rag|run_command|web_fetch|generate_text|notify", "description": "what to do", "input": "parameters or query for this step", "depends_on": []},
+    {"id": 1, "action": "search_memory|ask_rag|run_command|web_fetch|generate_text|notify|remember", "description": "what to do", "input": "parameters or query for this step", "depends_on": []},
     {"id": 2, "action": "generate_text", "description": "synthesise results", "input": "...", "depends_on": [1]}
   ],
   "estimated_steps": 3
@@ -33,7 +35,8 @@ Available actions:
 - notify: send a notification
 - remember: store something in memory
 
-Keep plans to 2-6 steps. Prefer fewer, broader steps over many tiny ones."""
+Keep plans to 2-6 steps. Prefer fewer, broader steps over many tiny ones.
+Mark steps as depends_on: [] if they are independent and can run in parallel."""
 
 
 def create_plan(query: str, run_chat_fn, context: str = "") -> dict[str, Any]:
@@ -134,4 +137,77 @@ def execute_plan(plan: dict[str, Any], run_chat_fn, **tool_fns) -> dict[str, Any
         "steps_executed": len(step_outputs),
         "results": step_outputs,
         "completed_at": datetime.now(timezone.utc).isoformat(),
+        "execution_mode": "sequential",
+    }
+
+
+def execute_plan_parallel(plan: dict[str, Any], run_chat_fn, **tool_fns) -> dict[str, Any]:
+    """Execute plan steps with parallelism for independent steps.
+
+    Steps with no dependencies (depends_on: []) or whose dependencies are
+    already complete can run in parallel.
+    """
+    steps = plan.get("steps", [])
+    results: dict[int, Any] = {}
+    step_outputs: list[dict[str, Any]] = []
+    completed: set[int] = set()
+
+    # Build dependency graph
+    steps_by_id = {s["id"]: s for s in steps}
+    remaining = set(s["id"] for s in steps)
+
+    while remaining:
+        # Find steps whose dependencies are all met
+        ready = []
+        for sid in remaining:
+            step = steps_by_id[sid]
+            deps = set(step.get("depends_on", []))
+            if deps.issubset(completed):
+                ready.append(step)
+
+        if not ready:
+            # Deadlock — execute remaining sequentially
+            for sid in list(remaining):
+                step = steps_by_id[sid]
+                output = execute_step(step, results, run_chat_fn, **tool_fns)
+                results[sid] = output.get("result", output.get("error", ""))
+                step_outputs.append({"step": step, "output": output})
+                completed.add(sid)
+                remaining.discard(sid)
+            break
+
+        if len(ready) == 1:
+            # Only one step ready — run directly
+            step = ready[0]
+            output = execute_step(step, results, run_chat_fn, **tool_fns)
+            results[step["id"]] = output.get("result", output.get("error", ""))
+            step_outputs.append({"step": step, "output": output})
+            completed.add(step["id"])
+            remaining.discard(step["id"])
+        else:
+            # Multiple independent steps — run in parallel
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(ready), MAX_PARALLEL_WORKERS)) as pool:
+                futures = {}
+                for step in ready:
+                    f = pool.submit(execute_step, step, results, run_chat_fn, **tool_fns)
+                    futures[f] = step
+
+                for future in concurrent.futures.as_completed(futures):
+                    step = futures[future]
+                    try:
+                        output = future.result()
+                    except Exception as exc:
+                        output = {"status": "error", "action": step.get("action"), "error": str(exc)}
+                    results[step["id"]] = output.get("result", output.get("error", ""))
+                    step_outputs.append({"step": step, "output": output})
+                    completed.add(step["id"])
+                    remaining.discard(step["id"])
+
+    return {
+        "plan_id": plan.get("plan_id", ""),
+        "goal": plan.get("goal", ""),
+        "steps_executed": len(step_outputs),
+        "results": step_outputs,
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "execution_mode": "parallel",
     }

@@ -250,6 +250,9 @@
     "retrieval_answer": ["premium_answer", "premium_answer_backup", "reasoning_backup", "local_fast"],
     "final_answer": ["premium_answer", "premium_answer_backup", "reasoning_backup", "local_fast"],
     "fallback_general": ["premium_answer", "premium_answer_backup", "reasoning_backup", "local_fast"],
-    "vision_describe": ["vision_primary", "vision_backup"]
+    "vision_describe": ["vision_primary", "vision_backup"],
+    "knowledge_graph_extract": ["json_extract_primary", "json_extract_backup", "local_fast"],
+    "self_critique": ["reasoning_primary", "reasoning_backup", "local_fast"],
+    "sentiment_analysis": ["router_fast", "classifier_backup", "local_fast"]
   }
 }

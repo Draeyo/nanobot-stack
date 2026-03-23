@@ -1,18 +1,11 @@
-"""nanobot RAG bridge v7 — FastAPI application.
+"""nanobot RAG bridge v9 — FastAPI application.
 
-Improvements over v6:
-  - Cross-encoder reranker (BAAI/bge-reranker-v2-m3)
-  - Hybrid search: dense + sparse vectors in Qdrant
-  - Metadata enrichment at ingestion (title, section, doc_date)
-  - Readiness probe in /healthz (Qdrant + API key checks)
-  - Circuit breaker on LLM provider fallback chains
-  - Rate limiting on /remember (configurable token bucket)
-  - Prometheus metrics endpoint (/metrics)
-  - Structured JSON logging
-  - Audit log middleware (append-only JSONL)
-  - LRU embedding cache with TTL
-  - Batched embeddings at ingestion
-  - Background /ingest with GC of deleted files
+v7: Reranker, hybrid search, metadata, circuit breaker, rate limiting, metrics, audit, cache.
+v8: Classification, smart-chat, planner, conversation hook, context compression, profile, feedback.
+v9: HyDE query rewriting, citations, knowledge graph, working memory, code interpreter,
+    PII filtering, plugin system, file watcher, sentiment detection, self-critique,
+    parallel planning, semantic chunking, per-user rate limiting, memory decay,
+    episodic/semantic memory types, export, explain mode, Chart.js dashboard.
 """
 
 from __future__ import annotations
@@ -142,7 +135,7 @@ token_tracker = TokenTracker()
 # ---------------------------------------------------------------------------
 # FastAPI app with middlewares
 # ---------------------------------------------------------------------------
-app = FastAPI(title="nanobot-rag-bridge-v8")
+app = FastAPI(title="nanobot-rag-bridge-v9")
 
 # Prometheus metrics
 try:
@@ -164,13 +157,21 @@ try:
 except Exception as exc:
     logger.warning("Audit log middleware not loaded: %s", exc)
 
-# Shutdown hook: persist token stats
+# Shutdown hook: persist token stats and stop file watcher
 @app.on_event("shutdown")
 def _shutdown():
     token_tracker.flush()
-    logger.info("Token stats flushed to disk")
+    try:
+        from file_watcher import FileWatcher
+        # File watcher instance may have been stored on app state
+        watcher = getattr(app, "_file_watcher", None)
+        if watcher:
+            watcher.stop()
+    except Exception:
+        pass
+    logger.info("Token stats flushed, file watcher stopped")
 
-# v8 extension setup is deferred to after run_chat_task / verify_token are defined (see below)
+# v9 extension setup is deferred to after run_chat_task / verify_token are defined (see below)
 
 # ---------------------------------------------------------------------------
 # Collection mapping
@@ -267,6 +268,22 @@ def chunk_text(text: str, max_chars: int = MAX_CHUNK_CHARS, overlap: int = CHUNK
     if current:
         chunks.append(current)
     return chunks
+
+
+SEMANTIC_CHUNKING_ENABLED = os.getenv("SEMANTIC_CHUNKING_ENABLED", "false").lower() == "true"
+
+def chunk_text_semantic(text: str, max_chars: int = MAX_CHUNK_CHARS) -> list[str]:
+    """Semantic chunking: delegates to the semantic_chunker module.
+
+    Falls back to paragraph-aware chunking if the module or embedding fails.
+    """
+    if not SEMANTIC_CHUNKING_ENABLED:
+        return chunk_text(text, max_chars)
+    try:
+        from semantic_chunker import semantic_chunk
+        return semantic_chunk(text, embed_fn=embed_texts, max_chars=max_chars)
+    except Exception:
+        return chunk_text(text, max_chars)
 
 # ---------------------------------------------------------------------------
 # Metadata-enriched text extraction
@@ -431,6 +448,22 @@ def run_chat_task(
     chain = route_chain(task_type)
     if not chain:
         raise RuntimeError(f"No route chain for task_type={task_type}")
+    # Adaptive routing: reorder chain by quality scores if enough data
+    try:
+        from adaptive_router import adaptive_router
+        models_in_chain = []
+        for pn in chain:
+            try:
+                p = resolve_profile(pn)
+                models_in_chain.append(p.get("model", pn))
+            except Exception:
+                models_in_chain.append(pn)
+        ranked_models = adaptive_router.get_model_ranking(task_type, models_in_chain)
+        if ranked_models != models_in_chain:
+            model_to_profile = {m: pn for pn, m in zip(chain, models_in_chain)}
+            chain = [model_to_profile[m] for m in ranked_models if m in model_to_profile]
+    except Exception:
+        pass
     with traced("chat_task", {"task_type": task_type, "chain": chain}):
         for profile_name in chain:
             cb = circuit_breakers.get(profile_name)
@@ -738,7 +771,14 @@ def _run_ingest_sync() -> dict[str, Any]:
             sections = _extract_sections(raw_stripped)
             doc_date = datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc).isoformat()
 
-            chunks = chunk_text(raw_stripped)
+            # PII filtering on ingest
+            try:
+                from pii_filter import redact_for_ingest
+                raw_stripped, _pii = redact_for_ingest(raw_stripped)
+            except ImportError:
+                pass
+
+            chunks = chunk_text_semantic(raw_stripped) if SEMANTIC_CHUNKING_ENABLED else chunk_text(raw_stripped)
             if not chunks:
                 continue
 
@@ -978,12 +1018,27 @@ def search(body: SearchIn):
         reranked = apply_feedback_boosts(reranked)
     except Exception:
         pass
+    # Apply memory decay: penalize old, infrequently-accessed memories
+    try:
+        from memory_decay import apply_decay_to_results
+        reranked = apply_decay_to_results(reranked, score_key="final_score")
+    except Exception:
+        pass
     return {"query": body.query, "results": reranked, "embedding_attempts": embedding_attempts, "collections": collections}
 
 @app.post("/remember", dependencies=[Depends(verify_token)])
 def remember(body: RememberIn):
     rate_limiters.check("remember")
     final_text = normalize_whitespace(body.text)
+
+    # PII filtering before storage
+    pii_types_found: list[str] = []
+    try:
+        from pii_filter import redact_for_ingest
+        final_text, pii_types_found = redact_for_ingest(final_text)
+    except ImportError:
+        pass
+
     summary_attempts: list[dict[str, Any]] = []
     if body.summarize and AUTO_SUMMARIZE_MEMORY:
         try:
@@ -1010,11 +1065,23 @@ def remember(body: RememberIn):
     point_vectors: dict[str, Any] = {"dense": vector}
     if SPARSE_VECTORS_ENABLED:
         point_vectors["sparse"] = compute_sparse_vector(final_text)
+    # Determine memory type (episodic vs semantic)
+    memory_type = "semantic"
+    lower_text = final_text.lower()
+    if any(kw in lower_text for kw in ("today", "yesterday", "meeting", "decided", "just now", "this morning")):
+        memory_type = "episodic"
+    if "episodic" not in body.tags and "semantic" not in body.tags:
+        body.tags = sorted(set(body.tags + [memory_type]))
+
     payload = {
         "text": final_text, "subject": body.subject, "tags": body.tags,
         "source_name": body.source, "created_at": utcnow(),
         "path": f"memory://{body.collection}/{point_id}",
+        "memory_type": memory_type,
+        "access_count": 0,
     }
+    if pii_types_found:
+        payload["pii_redacted"] = pii_types_found
     qdrant.upsert(collection_name=body.collection, points=[models.PointStruct(id=point_id, vector=point_vectors, payload=payload)])
     return {"ok": True, "id": point_id, "payload": payload, "embedding_attempts": embedding_attempts, "summary_attempts": summary_attempts}
 
@@ -1138,3 +1205,128 @@ try:
     logger.info("SSE streaming endpoints mounted (/smart-chat-stream)")
 except Exception as exc:
     logger.warning("Failed to mount streaming endpoints: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Plugin system — discover and load plugins from PLUGINS_DIR
+# ---------------------------------------------------------------------------
+try:
+    from plugins import plugin_registry
+    loaded_plugins = plugin_registry.discover_and_load()
+    # Mount plugin routers
+    for plugin_name, plugin_router in plugin_registry.get_routers():
+        app.include_router(plugin_router, prefix=f"/plugins/{plugin_name}", dependencies=[Depends(verify_token)])
+    if loaded_plugins:
+        logger.info("Loaded %d plugins: %s", len(loaded_plugins), ", ".join(loaded_plugins))
+except Exception as exc:
+    logger.info("Plugin system not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# File watcher for real-time ingestion
+# ---------------------------------------------------------------------------
+try:
+    from file_watcher import FileWatcher, WATCHER_ENABLED
+    if WATCHER_ENABLED:
+        _watcher_dirs = [d for d in COLLECTION_DIR_MAP.values()]
+        _file_watcher = FileWatcher(_watcher_dirs, _background_ingest)
+        _file_watcher.start()
+        app._file_watcher = _file_watcher
+        logger.info("File watcher started for %d directories", len(_watcher_dirs))
+except Exception as exc:
+    logger.info("File watcher not started: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Elevated shell (approval-gated mutating commands)
+# ---------------------------------------------------------------------------
+try:
+    from elevated_shell import router as elevated_router, init_elevated, ELEVATED_ENABLED
+    if ELEVATED_ENABLED:
+        init_elevated(verify_token_dep=verify_token)
+        app.include_router(elevated_router, dependencies=[Depends(verify_token)])
+        logger.info("Elevated shell endpoints mounted (/actions/*)")
+    else:
+        logger.info("Elevated shell disabled (ELEVATED_SHELL_ENABLED=false)")
+except Exception as exc:
+    logger.info("Elevated shell not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Config writer (approval-gated configuration changes)
+# ---------------------------------------------------------------------------
+try:
+    from config_writer import router as config_router, init_config_writer, CONFIG_WRITER_ENABLED
+    if CONFIG_WRITER_ENABLED:
+        init_config_writer(verify_token_dep=verify_token)
+        app.include_router(config_router, dependencies=[Depends(verify_token)])
+        logger.info("Config writer endpoints mounted (/config/*)")
+    else:
+        logger.info("Config writer disabled (CONFIG_WRITER_ENABLED=false)")
+except Exception as exc:
+    logger.info("Config writer not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Channel adapters (Telegram, Discord, WhatsApp)
+# ---------------------------------------------------------------------------
+try:
+    from channels import channel_manager, CHANNELS_ENABLED
+    if CHANNELS_ENABLED:
+        from channels.telegram_adapter import TelegramAdapter
+        from channels.discord_adapter import DiscordAdapter
+        from channels.whatsapp_adapter import WhatsAppAdapter, router as whatsapp_router
+
+        def _channel_chat(messages, session_id=""):
+            """Sync bridge for channel adapters to call the smart-chat pipeline."""
+            from extensions import smart_chat_pipeline
+            return smart_chat_pipeline(messages, session_id=session_id)
+
+        channel_manager.init(chat_fn=_channel_chat)
+        channel_manager.register(TelegramAdapter())
+        channel_manager.register(DiscordAdapter())
+        channel_manager.register(WhatsAppAdapter())
+
+        # Mount WhatsApp webhook (no auth — Meta servers call this directly)
+        app.include_router(whatsapp_router)
+
+        # Mount DM pairing admin endpoints (requires auth)
+        try:
+            from dm_pairing import router as pairing_router, init_pairing
+            init_pairing(verify_token_dep=verify_token)
+            app.include_router(pairing_router, dependencies=[Depends(verify_token)])
+            logger.info("DM pairing endpoints mounted (/channels/pair/*)")
+        except Exception as pair_exc:
+            logger.info("DM pairing not loaded: %s", pair_exc)
+
+        @app.on_event("startup")
+        async def _start_channels():
+            started = await channel_manager.start_all()
+            if started:
+                logger.info("Channel adapters started: %s", ", ".join(started))
+
+        @app.on_event("shutdown")
+        async def _stop_channels():
+            await channel_manager.stop_all()
+
+        logger.info("Channel adapter system initialized")
+except Exception as exc:
+    logger.info("Channel adapters not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Centralized settings registry
+# ---------------------------------------------------------------------------
+try:
+    from settings_registry import router as settings_router, init_settings
+    init_settings(verify_token_dep=verify_token)
+    app.include_router(settings_router, dependencies=[Depends(verify_token)])
+    logger.info("Settings registry mounted (/settings/*)")
+except Exception as exc:
+    logger.info("Settings registry not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Admin web UI
+# ---------------------------------------------------------------------------
+try:
+    from admin_api import router as admin_router, init_admin_api
+    init_admin_api(verify_token_dep=verify_token, qdrant_client=qdrant)
+    app.include_router(admin_router)
+    logger.info("Admin UI mounted (/admin)")
+except Exception as exc:
+    logger.info("Admin UI not loaded: %s", exc)
+

@@ -1,0 +1,71 @@
+# ======================== Secrets & env files ========================
+.env
+*.env
+!stack.env.example
+stack.env
+
+# Bridge token (generated at deploy time)
+.bridge_token
+
+# ======================== Python ========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+.eggs/
+.venv/
+venv/
+env/
+
+# ======================== Runtime state ========================
+state/
+*.db
+*.sqlite3
+knowledge_graph.db
+
+# Adaptive router persisted scores
+adaptive_scores.json
+
+# ======================== Logs ========================
+*.log
+*.jsonl
+token_stats.jsonl
+audit.jsonl
+
+# ======================== Uploaded / generated content ========================
+plugins/uploads/
+exports/
+
+# ======================== OS files ========================
+.DS_Store
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+
+# ======================== IDE / editors ========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ======================== Node (if web UI) ========================
+node_modules/
+package-lock.json
+
+# ======================== Docker ========================
+docker-compose.override.yml
+
+# ======================== Misc ========================
+*.pem
+*.key
+*.crt
+*.bak
+*.tmp
+.claude/

@@ -64,3 +64,18 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
             logger.warning("Failed to write audit log: %s", exc)
 
         return response
+
+
+def log_audit_event(event_type: str, data: dict) -> None:
+    """Write a structured audit record outside of HTTP middleware context."""
+    record = {
+        "ts": datetime.now(timezone.utc).isoformat(),
+        "event": event_type,
+        **data,
+    }
+    try:
+        AUDIT_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with AUDIT_LOG_PATH.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+    except Exception as exc:
+        logger.warning("Failed to write audit event: %s", exc)

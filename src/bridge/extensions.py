@@ -1,15 +1,17 @@
-"""v8 extension endpoints — mounted onto the main FastAPI app.
+"""v9 extension endpoints — mounted onto the main FastAPI app.
 
 Adds: /classify, /conversation-hook, /context-prefetch, /summarize-conversation,
 /compact, /plan, /execute-plan, /smart-chat, /feedback, /feedback-stats,
-/profile, /dashboard
+/profile, /dashboard, /knowledge-graph, /explain, /export, /pii-check,
+/code-execute, /plugins, /query-rewrite, /working-memory
 """
 from __future__ import annotations
+import asyncio
 import json, logging
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 logger = logging.getLogger("rag-bridge.extensions")
@@ -48,7 +50,20 @@ def classify_endpoint(body: ClassifyIn, request: Request):
     return classify_query(body.query, _run_chat_fn)
 
 # --------------------------------------------------------------------------
-# Conversation hook (post-conversation fact extraction + profile update)
+# Query rewriting (HyDE + multi-query)
+# --------------------------------------------------------------------------
+class QueryRewriteIn(BaseModel):
+    query: str
+    mode: str = "hyde"  # 'hyde', 'multi', 'both'
+
+@router.post("/query-rewrite")
+def query_rewrite_endpoint(body: QueryRewriteIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from query_rewriter import rewrite_query
+    return rewrite_query(body.query, _run_chat_fn, embed_fn=_embed_fn_adapter, mode=body.mode)
+
+# --------------------------------------------------------------------------
+# Conversation hook (post-conversation fact extraction + profile + KG)
 # --------------------------------------------------------------------------
 class ConversationHookIn(BaseModel):
     messages: list[dict[str, str]]
@@ -63,7 +78,7 @@ def conversation_hook(body: ConversationHookIn, request: Request):
 
     results: dict[str, Any] = {"session_id": body.session_id}
 
-    # Single merged LLM call: extract facts + profile updates together (saves 1 LLM call)
+    # Single merged LLM call: extract facts + profile updates together
     try:
         merged_msgs = build_merged_extract_messages(body.messages)
         resp = _run_chat_fn("remember_extract", merged_msgs, json_mode=True, max_tokens=1200)
@@ -80,18 +95,24 @@ def conversation_hook(body: ConversationHookIn, request: Request):
     }
     results["extraction"] = extraction
 
-    # Auto-remember extracted facts
+    # Auto-remember extracted facts with memory type tagging
     if body.auto_remember and extraction.get("facts"):
         stored = []
         for fact in extraction["facts"]:
             if fact.get("importance") == "low":
                 continue
             try:
+                tags = fact.get("tags", [])
+                # Tag episodic vs semantic memory
+                if any(kw in fact.get("text", "").lower() for kw in ("today", "yesterday", "just", "meeting", "decided")):
+                    tags = list(set(tags + ["episodic"]))
+                else:
+                    tags = list(set(tags + ["semantic"]))
                 mem_result = _remember_fn(
                     text=fact["text"],
                     collection="memory_personal",
                     subject=fact.get("subject", ""),
-                    tags=fact.get("tags", []),
+                    tags=tags,
                     source="conversation_hook",
                     summarize=False,
                 )
@@ -115,7 +136,7 @@ def conversation_hook(body: ConversationHookIn, request: Request):
         except Exception:
             results["summary_stored"] = False
 
-    # Apply profile updates from the same merged response (no extra LLM call)
+    # Apply profile updates
     profile_updates = data.get("profile_updates", {})
     if profile_updates:
         try:
@@ -127,6 +148,17 @@ def conversation_hook(body: ConversationHookIn, request: Request):
             results["profile_error"] = str(e)
     else:
         results["profile_updated"] = False
+
+    # Knowledge graph extraction (async, non-blocking)
+    try:
+        from knowledge_graph import extract_and_store, KG_ENABLED
+        if KG_ENABLED:
+            all_facts_text = " ".join(f["text"] for f in extraction.get("facts", []))
+            if all_facts_text:
+                kg_result = extract_and_store(all_facts_text, _run_chat_fn)
+                results["knowledge_graph"] = kg_result
+    except Exception as e:
+        results["knowledge_graph"] = {"error": str(e)}
 
     return results
 
@@ -143,13 +175,32 @@ def context_prefetch(body: PrefetchIn, request: Request):
     from user_profile import load_profile
 
     def simple_search(query, collections, limit=5):
-        """Adapter for the prefetch search."""
         results = _search_fn(query=query, collections=collections, limit=limit)
         return results.get("results", [])
 
     profile = load_profile()
     context = build_context_prefetch(body.query, simple_search, profile)
-    return {"context": context, "profile": profile}
+
+    # Proactive hints from knowledge graph
+    kg_context = ""
+    try:
+        from knowledge_graph import query_entity, KG_ENABLED
+        if KG_ENABLED:
+            # Extract key nouns and look them up in KG
+            import re
+            words = re.findall(r"\b[A-Z][a-z]+(?:\s[A-Z][a-z]+)*\b", body.query)
+            for word in words[:3]:
+                kg = query_entity(word)
+                if kg.get("found"):
+                    rels = kg.get("outgoing_relations", [])[:3]
+                    if rels:
+                        kg_lines = [f"- {word} → {r['relation']} → {r['target']}" for r in rels]
+                        kg_context += "\n## Knowledge graph\n" + "\n".join(kg_lines) + "\n"
+                    break
+    except Exception:
+        pass
+
+    return {"context": context + kg_context, "profile": profile}
 
 # --------------------------------------------------------------------------
 # Conversation summarization
@@ -192,7 +243,6 @@ def compact_endpoint(body: CompactIn, request: Request):
     if _verify_token: _verify_token(request)
     from conversation_memory import compact_memories
 
-    # Search for memories on this subject
     results = _search_fn(query=body.subject, collections=[body.collection], limit=body.limit)
     memories = results.get("results", [])
     if len(memories) < 2:
@@ -200,7 +250,6 @@ def compact_endpoint(body: CompactIn, request: Request):
 
     compaction = compact_memories(body.subject, memories, _run_chat_fn)
     if compaction.get("compacted") and compaction.get("merged_text"):
-        # Store the merged memory
         _remember_fn(
             text=compaction["merged_text"],
             collection=body.collection,
@@ -213,17 +262,18 @@ def compact_endpoint(body: CompactIn, request: Request):
     return compaction
 
 # --------------------------------------------------------------------------
-# Planning
+# Planning (with parallel execution support)
 # --------------------------------------------------------------------------
 class PlanIn(BaseModel):
     query: str
     context: str = ""
     execute: bool = False
+    parallel: bool = True
 
 @router.post("/plan")
 def plan_endpoint(body: PlanIn, request: Request):
     if _verify_token: _verify_token(request)
-    from planner import create_plan, execute_plan
+    from planner import create_plan, execute_plan, execute_plan_parallel
 
     plan_result = create_plan(body.query, _run_chat_fn, body.context)
     if not body.execute or not plan_result.get("plan"):
@@ -242,23 +292,54 @@ def plan_endpoint(body: PlanIn, request: Request):
     def simple_remember(text):
         return _remember_fn(text=text, collection="memory_personal", source="planner", summarize=True)
 
-    execution = execute_plan(
-        plan_result["plan"], _run_chat_fn,
-        search_fn=simple_search, ask_fn=simple_ask, remember_fn=simple_remember,
-    )
+    def simple_shell(cmd):
+        from tools import run_shell_command
+        return run_shell_command(cmd)
+
+    def simple_web_fetch(url):
+        import asyncio
+        from tools import web_fetch
+        return asyncio.run(web_fetch(url))
+
+    def simple_notify(msg):
+        import asyncio
+        from tools import send_notification
+        return asyncio.run(send_notification(msg))
+
+    tool_fns = dict(search_fn=simple_search, ask_fn=simple_ask, remember_fn=simple_remember,
+                    shell_fn=simple_shell, web_fn=simple_web_fetch, notify_fn=simple_notify)
+
+    if body.parallel:
+        execution = execute_plan_parallel(plan_result["plan"], _run_chat_fn, **tool_fns)
+    else:
+        execution = execute_plan(plan_result["plan"], _run_chat_fn, **tool_fns)
+
     return {"plan": plan_result["plan"], "execution": execution}
 
 # --------------------------------------------------------------------------
-# Smart chat (classify → prefetch → route → respond)
+# Smart chat v2 (classify → HyDE → retrieve → sentiment → cite → self-critique)
 # --------------------------------------------------------------------------
 class SmartChatIn(BaseModel):
     messages: list[dict[str, str]]
     auto_classify: bool = True
     session_id: str = ""
+    enable_hyde: bool = True
+    enable_citations: bool = True
+    enable_self_critique: bool = True
+
+SELF_CRITIQUE_PROMPT = """Review your answer for accuracy and completeness.
+If the answer has factual errors, missing important context, or could be significantly improved, rewrite it.
+If the answer is already good, return it unchanged.
+Only return the final answer text, nothing else."""
+
+CITATION_INSTRUCTION = """When using information from the provided context, add inline citations
+using [1], [2], etc. At the end, list all sources used. Format:
+Sources:
+[1] source_name — relevant quote or summary"""
 
 @router.post("/smart-chat")
-def smart_chat(body: SmartChatIn, request: Request):
-    if _verify_token: _verify_token(request)
+def smart_chat(body: SmartChatIn, request: Request = None):
+    if request and _verify_token: _verify_token(request)
     from query_classifier import classify_query
     from conversation_memory import build_context_prefetch
     from user_profile import load_profile
@@ -274,18 +355,49 @@ def smart_chat(body: SmartChatIn, request: Request):
 
     meta: dict[str, Any] = {}
 
-    # 1. Classify
+    # 0. Working memory — check for cached context
+    session = None
+    try:
+        from working_memory import working_memory
+        session = working_memory.get_session(body.session_id)
+        session.track_query(last_user)
+    except Exception:
+        pass
+
+    # 1. Sentiment detection
+    try:
+        from sentiment import detect_session_tone, build_tone_system_prompt
+        tone_info = detect_session_tone(body.messages)
+        meta["tone"] = tone_info
+    except Exception:
+        tone_info = {"tone": "neutral", "urgency": 0.3, "style_hint": ""}
+
+    # 2. Classify
     classification = {"task_type": "fallback_general", "needs_retrieval": False, "classifier_used": False}
     if body.auto_classify and last_user:
         classification = classify_query(last_user, _run_chat_fn)
     meta["classification"] = classification
 
-    # 2. Context prefetch with compression
+    # 3. Query rewriting (HyDE)
+    hyde_vector = None
+    if body.enable_hyde and classification.get("needs_retrieval") and last_user:
+        try:
+            from query_rewriter import rewrite_query
+            rewrite_result = rewrite_query(last_user, _run_chat_fn, embed_fn=_embed_fn_adapter, mode="hyde")
+            hyde_vector = rewrite_result.get("hyde_vector")
+            meta["hyde_used"] = hyde_vector is not None
+            if rewrite_result.get("hyde_passage"):
+                meta["hyde_passage_preview"] = rewrite_result["hyde_passage"][:200]
+        except Exception:
+            meta["hyde_used"] = False
+
+    # 4. Context prefetch with compression
     def simple_search(query, collections, limit=5):
         return _search_fn(query=query, collections=collections, limit=limit).get("results", [])
 
     profile = load_profile()
     context_block = ""
+    retrieval_sources = []  # For citations
 
     augmented = list(body.messages)
     try:
@@ -318,7 +430,6 @@ def smart_chat(body: SmartChatIn, request: Request):
                     except Exception:
                         pass
 
-        # Resolve the actual model name for budget calculation (not task_type)
         task_type = classification.get("task_type", "fallback_general")
         model_name = resolve_model_for_task(task_type)
         conv_tokens = estimate_messages_tokens(augmented)
@@ -326,8 +437,25 @@ def smart_chat(body: SmartChatIn, request: Request):
 
         if classification.get("needs_retrieval") and last_user:
             results = simple_search(last_user, [], limit=6)
-            # Deduplicate with embed_fn for semantic dedup
+
+            # Track retrieval in working memory — filter already-seen chunks
+            if session:
+                results = [r for r in results if not session.is_chunk_seen(str(r.get("id", "")))]
+                session.track_retrieval([str(r.get("id", "")) for r in results])
+
             results = deduplicate_by_embedding(results, [], augmented, embed_fn=_embed_fn_adapter)
+
+            # Build citations map
+            for idx, r in enumerate(results):
+                payload = r.get("payload", {})
+                source_name = payload.get("title") or payload.get("source_name") or payload.get("path", "")
+                retrieval_sources.append({
+                    "index": idx + 1,
+                    "source": source_name,
+                    "text_preview": payload.get("text", "")[:200],
+                    "score": round(r.get("final_score", r.get("score", 0)), 3),
+                })
+
             from user_profile import format_profile_block
             profile_block = format_profile_block(profile)
             context_block = assemble_context(profile_block, results, token_budget, augmented)
@@ -339,26 +467,277 @@ def smart_chat(body: SmartChatIn, request: Request):
         if classification.get("needs_retrieval") and last_user:
             context_block = build_context_prefetch(last_user, simple_search, profile)
 
-    # 3. Build augmented messages with context
+    # 5. Build augmented messages with context + tone + citation instructions
+    system_additions = []
     if context_block:
-        if augmented and augmented[0].get("role") == "system":
-            augmented[0] = {"role": "system", "content": context_block + "\n\n" + augmented[0]["content"]}
-        else:
-            augmented.insert(0, {"role": "system", "content": context_block})
-    meta["context_injected"] = bool(context_block)
+        system_additions.append(context_block)
 
-    # 4. Route to the right model
+    # Add tone adaptation hint
+    tone_hint = tone_info.get("style_hint", "")
+    if tone_hint:
+        system_additions.append(f"\n## Tone adaptation\n{tone_hint}")
+
+    # Add citation instructions if retrieval was used
+    if body.enable_citations and retrieval_sources:
+        system_additions.append(f"\n{CITATION_INSTRUCTION}")
+
+    # Proactive context from knowledge graph
+    try:
+        from knowledge_graph import query_entity, KG_ENABLED
+        if KG_ENABLED and last_user:
+            import re
+            proper_nouns = re.findall(r"\b[A-Z][a-z]+(?:\s[A-Z][a-z]+)*\b", last_user)
+            kg_lines = []
+            for noun in proper_nouns[:2]:
+                kg = query_entity(noun)
+                if kg.get("found"):
+                    for r in kg.get("outgoing_relations", [])[:2]:
+                        kg_lines.append(f"- {noun} → {r['relation']} → {r['target']}")
+            if kg_lines:
+                system_additions.append("## Known relationships\n" + "\n".join(kg_lines))
+                meta["kg_context_injected"] = True
+    except Exception:
+        pass
+
+    if system_additions:
+        full_system = "\n\n".join(system_additions)
+        if augmented and augmented[0].get("role") == "system":
+            augmented[0] = {"role": "system", "content": full_system + "\n\n" + augmented[0]["content"]}
+        else:
+            augmented.insert(0, {"role": "system", "content": full_system})
+    meta["context_injected"] = bool(system_additions)
+
+    # 6. Route to the right model
     task_type = classification.get("task_type", "fallback_general")
     result = _run_chat_fn(task_type, augmented, max_tokens=2400)
+    answer_text = result.get("text", "")
     meta["task_type_used"] = task_type
 
-    return {
-        "text": result.get("text", ""),
+    # 7. Self-critique (reflection loop)
+    if body.enable_self_critique and answer_text and len(answer_text) > 100:
+        try:
+            critique_result = _run_chat_fn("critique_review", [
+                {"role": "system", "content": SELF_CRITIQUE_PROMPT},
+                {"role": "user", "content": f"Original question: {last_user}\n\nAnswer to review:\n{answer_text}"},
+            ], max_tokens=2400)
+            revised = critique_result.get("text", "").strip()
+            if revised and revised != answer_text and len(revised) > 50:
+                meta["self_critique_applied"] = True
+                answer_text = revised
+            else:
+                meta["self_critique_applied"] = False
+        except Exception:
+            meta["self_critique_applied"] = False
+
+    # 8. Store in working memory
+    if session:
+        session.put(f"last_answer_{last_user[:50]}", answer_text[:500])
+        topic = classification.get("raw_category", "")
+        if topic:
+            session.track_topic(topic)
+
+    response = {
+        "text": answer_text,
         "attempts": result.get("attempts", []),
         "profile": result.get("profile", ""),
         "model": result.get("model", ""),
         "meta": meta,
     }
+
+    if body.enable_citations and retrieval_sources:
+        response["sources"] = retrieval_sources
+
+    return response
+
+
+def smart_chat_pipeline(messages: list[dict[str, str]], session_id: str = "",
+                         auto_classify: bool = True, enable_hyde: bool = True,
+                         enable_citations: bool = False,
+                         enable_self_critique: bool = True) -> dict[str, Any]:
+    """Callable entry point for the smart-chat pipeline (used by channel adapters)."""
+    body = SmartChatIn(
+        messages=messages, auto_classify=auto_classify, session_id=session_id,
+        enable_hyde=enable_hyde, enable_citations=enable_citations,
+        enable_self_critique=enable_self_critique,
+    )
+    # Build a minimal mock request for the auth-free path
+    return smart_chat(body, request=None)
+
+# --------------------------------------------------------------------------
+# Explain mode — show full pipeline trace
+# --------------------------------------------------------------------------
+class ExplainIn(BaseModel):
+    query: str
+    messages: list[dict[str, str]] = []
+
+@router.post("/explain")
+def explain_endpoint(body: ExplainIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from query_classifier import classify_query
+
+    trace: dict[str, Any] = {"query": body.query}
+
+    # 1. Classification
+    classification = classify_query(body.query, _run_chat_fn)
+    trace["classification"] = classification
+
+    # 2. Route preview
+    task_type = classification.get("task_type", "fallback_general")
+    from token_optimizer import resolve_model_for_task
+    model = resolve_model_for_task(task_type)
+    trace["routing"] = {"task_type": task_type, "model": model}
+
+    # 3. Search preview
+    results = _search_fn(query=body.query, collections=[], limit=5)
+    trace["search_results"] = [
+        {
+            "source": r.get("payload", {}).get("title") or r.get("payload", {}).get("path", ""),
+            "score": round(r.get("final_score", r.get("score", 0)), 3),
+            "preview": r.get("payload", {}).get("text", "")[:200],
+            "reranker": r.get("reranker", "unknown"),
+        }
+        for r in results.get("results", [])
+    ]
+
+    # 4. Tone detection
+    try:
+        from sentiment import detect_tone
+        trace["tone"] = detect_tone(body.query)
+    except Exception:
+        trace["tone"] = {"tone": "neutral"}
+
+    # 5. Knowledge graph check
+    try:
+        from knowledge_graph import query_entity, KG_ENABLED
+        if KG_ENABLED:
+            import re
+            nouns = re.findall(r"\b[A-Z][a-z]+\b", body.query)
+            kg_results = {}
+            for noun in nouns[:3]:
+                kg = query_entity(noun)
+                if kg.get("found"):
+                    kg_results[noun] = {
+                        "type": kg["entity"]["type"],
+                        "relations": len(kg.get("outgoing_relations", []) + kg.get("incoming_relations", [])),
+                    }
+            trace["knowledge_graph"] = kg_results
+    except Exception:
+        pass
+
+    return trace
+
+# --------------------------------------------------------------------------
+# Knowledge graph endpoints
+# --------------------------------------------------------------------------
+class KGQueryIn(BaseModel):
+    entity: str
+    depth: int = 1
+
+class KGRelationIn(BaseModel):
+    entity1: str
+    entity2: str
+
+@router.post("/knowledge-graph/query")
+def kg_query(body: KGQueryIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from knowledge_graph import query_entity
+    return query_entity(body.entity, body.depth)
+
+@router.post("/knowledge-graph/relations")
+def kg_relations(body: KGRelationIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from knowledge_graph import query_relations
+    return query_relations(body.entity1, body.entity2)
+
+@router.get("/knowledge-graph/stats")
+def kg_stats(request: Request):
+    if _verify_token: _verify_token(request)
+    from knowledge_graph import get_stats
+    return get_stats()
+
+# --------------------------------------------------------------------------
+# Code interpreter
+# --------------------------------------------------------------------------
+class CodeExecIn(BaseModel):
+    code: str
+    timeout: int | None = None
+
+@router.post("/code-execute")
+def code_execute_endpoint(body: CodeExecIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from code_interpreter import execute_code
+    return execute_code(body.code, body.timeout)
+
+# --------------------------------------------------------------------------
+# PII checking
+# --------------------------------------------------------------------------
+class PIICheckIn(BaseModel):
+    text: str
+
+@router.post("/pii-check")
+def pii_check_endpoint(body: PIICheckIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from pii_filter import check_text
+    return check_text(body.text)
+
+# --------------------------------------------------------------------------
+# Conversation export
+# --------------------------------------------------------------------------
+class ExportIn(BaseModel):
+    messages: list[dict[str, str]]
+    format: str = "markdown"  # 'markdown', 'json', 'pdf'
+    title: str = "Conversation Export"
+    session_id: str = ""
+    summary: str = ""
+
+@router.post("/export")
+def export_endpoint(body: ExportIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from export import export_markdown, export_structured, generate_pdf_bytes
+
+    if body.format == "json":
+        return export_structured(body.messages, body.session_id, body.summary)
+    elif body.format == "pdf":
+        md = export_markdown(body.messages, body.title, body.session_id)
+        pdf_bytes = generate_pdf_bytes(md, body.title)
+        if pdf_bytes:
+            return Response(content=pdf_bytes, media_type="application/pdf",
+                            headers={"Content-Disposition": f'attachment; filename="{body.title}.pdf"'})
+        return {"error": "PDF generation unavailable (install reportlab)"}
+    else:
+        md = export_markdown(body.messages, body.title, body.session_id)
+        return {"markdown": md}
+
+# --------------------------------------------------------------------------
+# Plugin management
+# --------------------------------------------------------------------------
+@router.get("/plugins")
+def list_plugins(request: Request):
+    if _verify_token: _verify_token(request)
+    try:
+        from plugins import plugin_registry
+        return {"plugins": plugin_registry.list_plugins(), "tools": plugin_registry.list_tools()}
+    except Exception as e:
+        return {"plugins": [], "error": str(e)}
+
+class PluginToolIn(BaseModel):
+    tool_name: str
+    params: dict[str, Any] = {}
+
+@router.post("/plugin-tool")
+def run_plugin_tool(body: PluginToolIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from plugins import plugin_registry
+    return plugin_registry.run_tool(body.tool_name, **body.params)
+
+# --------------------------------------------------------------------------
+# Working memory status
+# --------------------------------------------------------------------------
+@router.get("/working-memory")
+def working_memory_status(request: Request):
+    if _verify_token: _verify_token(request)
+    from working_memory import working_memory
+    return working_memory.stats()
 
 # --------------------------------------------------------------------------
 # Feedback
@@ -414,3 +793,47 @@ def dashboard():
     if not DASHBOARD_ENABLED:
         raise HTTPException(status_code=404, detail="dashboard disabled")
     return get_dashboard_html()
+
+# --------------------------------------------------------------------------
+# Shell / web-fetch / notify (wired for MCP server)
+# --------------------------------------------------------------------------
+class ShellIn(BaseModel):
+    command: str
+
+class WebFetchIn(BaseModel):
+    url: str
+
+class NotifyIn(BaseModel):
+    message: str
+    title: str = "nanobot"
+    level: str = "info"
+
+@router.post("/shell")
+def shell_endpoint(body: ShellIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from tools import run_shell_command
+    return run_shell_command(body.command)
+
+@router.post("/web-fetch")
+async def web_fetch_endpoint(body: WebFetchIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from tools import web_fetch
+    return await web_fetch(body.url)
+
+@router.post("/notify")
+async def notify_endpoint(body: NotifyIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from tools import send_notification
+    return await send_notification(body.message, body.title, body.level)
+
+# --------------------------------------------------------------------------
+# Channel adapter status
+# --------------------------------------------------------------------------
+@router.get("/channels/status")
+def channel_status_endpoint(request: Request):
+    if _verify_token: _verify_token(request)
+    try:
+        from channels import channel_manager
+        return channel_manager.status()
+    except Exception as e:
+        return {"error": str(e), "channels": {}}
