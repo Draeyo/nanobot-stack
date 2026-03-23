@@ -254,7 +254,7 @@ def record_outcome(
 
     if row and outcome == "success":
         level, threshold, successes = row
-        if threshold > 0 and successes >= threshold:
+        if 0 < threshold <= successes:
             _auto_promote(action_type, level)
 
 

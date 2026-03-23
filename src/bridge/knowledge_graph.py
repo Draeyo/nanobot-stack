@@ -29,20 +29,23 @@ RELATION_TYPES = ["works_on", "decided", "uses", "depends_on", "related_to", "cr
                   "manages", "scheduled_for", "blocked_by", "prefers", "replaced_by",
                   "part_of", "owns"]
 
-EXTRACT_ENTITIES_PROMPT = """Extract entities and relationships from this text.
+_ENTITY_TYPES_STR = "|".join(ENTITY_TYPES)
+_RELATION_TYPES_STR = "|".join(RELATION_TYPES)
 
-Return ONLY JSON:
-{{
-  "entities": [
-    {{"name": "entity name", "type": "{entity_types}", "description": "brief description"}}
-  ],
-  "relations": [
-    {{"source": "entity1", "relation": "{relation_types}", "target": "entity2", "context": "brief context"}}
-  ]
-}}
-
-Only extract clear, factual relationships. Skip vague or uncertain ones.
-Text: {{text}}""".format(entity_types="|".join(ENTITY_TYPES), relation_types="|".join(RELATION_TYPES))
+EXTRACT_ENTITIES_PROMPT = (
+    "Extract entities and relationships from this text.\n\n"
+    "Return ONLY JSON:\n"
+    "{\n"
+    '  "entities": [\n'
+    f'    {{"name": "entity name", "type": "{_ENTITY_TYPES_STR}", "description": "brief description"}}\n'
+    "  ],\n"
+    '  "relations": [\n'
+    f'    {{"source": "entity1", "relation": "{_RELATION_TYPES_STR}", "target": "entity2", "context": "brief context"}}\n'
+    "  ]\n"
+    "}\n\n"
+    "Only extract clear, factual relationships. Skip vague or uncertain ones.\n"
+    "Text: {text}"
+)
 
 
 def _get_conn() -> sqlite3.Connection:

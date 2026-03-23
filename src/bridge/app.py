@@ -1229,7 +1229,7 @@ except Exception as exc:
 try:
     from file_watcher import FileWatcher, WATCHER_ENABLED
     if WATCHER_ENABLED:
-        _watcher_dirs = [d for d in COLLECTION_DIR_MAP.values()]
+        _watcher_dirs = list(COLLECTION_DIR_MAP.values())
         _file_watcher = FileWatcher(_watcher_dirs, _background_ingest)
         _file_watcher.start()
         app._file_watcher = _file_watcher
@@ -1342,9 +1342,9 @@ try:
         init_trust(verify_token_dep=verify_token)
         app.include_router(trust_router, dependencies=[Depends(verify_token)])
         # Wire into tools and elevated shell
-        import trust_engine
-        from tools import set_trust_engine as set_tools_trust
-        from elevated_shell import set_trust_engine as set_elevated_trust
+        import trust_engine  # pylint: disable=ungrouped-imports
+        from tools import set_trust_engine as set_tools_trust  # pylint: disable=ungrouped-imports
+        from elevated_shell import set_trust_engine as set_elevated_trust  # pylint: disable=ungrouped-imports
         set_tools_trust(trust_engine)
         set_elevated_trust(trust_engine)
         logger.info("v10 trust engine loaded (/trust/*)")
@@ -1408,4 +1408,3 @@ try:
         logger.info("Agent orchestrator disabled (AGENT_ORCHESTRATOR_ENABLED=false)")
 except Exception as exc:
     logger.info("v10 agent orchestrator not loaded: %s", exc)
-

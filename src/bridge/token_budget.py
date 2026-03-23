@@ -14,6 +14,8 @@ import threading
 from datetime import datetime, timezone
 from typing import Any
 
+from fastapi import APIRouter, Request
+
 logger = logging.getLogger("rag-bridge.token-budget")
 
 # ---------------------------------------------------------------------------
@@ -323,8 +325,6 @@ def reset_daily_budget() -> None:
 # ---------------------------------------------------------------------------
 # FastAPI router
 # ---------------------------------------------------------------------------
-from fastapi import APIRouter, Request
-
 router = APIRouter(prefix="/budget", tags=["token-budget"])
 _verify_token = None
 

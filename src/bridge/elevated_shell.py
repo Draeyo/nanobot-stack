@@ -81,7 +81,7 @@ def _build_elevated_commands() -> dict[str, bool | list[str]]:
             extra = json.loads(extra_raw)
             if isinstance(extra, dict):
                 for binary, spec in extra.items():
-                    if isinstance(spec, bool) or isinstance(spec, list):
+                    if isinstance(spec, (bool, list)):
                         commands[binary] = spec
                     else:
                         logger.warning("ELEVATED_EXTRA_COMMANDS: ignoring invalid spec for '%s'", binary)
