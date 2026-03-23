@@ -45,6 +45,12 @@ from token_optimizer import (
     estimate_messages_tokens, estimate_tokens,
 )
 
+# Scheduler
+from broadcast_notifier import BroadcastNotifier
+from scheduler import SchedulerManager
+from scheduler_api import router as scheduler_router, init_scheduler_api
+from scheduler_registry import JobRegistry
+
 load_dotenv()
 
 # ---------------------------------------------------------------------------
@@ -1266,6 +1272,7 @@ except Exception as exc:
 # ---------------------------------------------------------------------------
 # Channel adapters (Telegram, Discord, WhatsApp)
 # ---------------------------------------------------------------------------
+channel_manager = None  # may be overwritten below; scheduler uses None-safe BroadcastNotifier
 try:
     from channels import channel_manager, CHANNELS_ENABLED
     if CHANNELS_ENABLED:
@@ -1308,6 +1315,30 @@ try:
         logger.info("Channel adapter system initialized")
 except Exception as exc:
     logger.info("Channel adapters not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Scheduler — initialized outside channels try/except to start independently
+# ---------------------------------------------------------------------------
+_broadcast_notifier = BroadcastNotifier(channel_manager=channel_manager)
+scheduler_manager = SchedulerManager(
+    broadcast_notifier=_broadcast_notifier,
+    qdrant_client=qdrant,
+)
+init_scheduler_api(manager=scheduler_manager, verify_token_dep=verify_token)
+app.include_router(scheduler_router)
+
+
+@app.on_event("startup")
+async def _start_scheduler():
+    scheduler_manager.start()
+    JobRegistry(scheduler_manager).seed()
+    logger.info("Scheduler started")
+
+
+@app.on_event("shutdown")
+async def _stop_scheduler():
+    scheduler_manager.stop()
+
 
 # ---------------------------------------------------------------------------
 # Centralized settings registry
