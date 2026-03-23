@@ -159,8 +159,7 @@ def get_all_settings() -> list[dict[str, Any]]:
     """Return all settings grouped by section."""
     result = []
     for s in _SETTINGS:
-        default: str = s.default
-        current = os.getenv(s.key, default)
+        current = os.getenv(s.key, str(s.default))  # pylint: disable=invalid-envvar-value
         result.append({
             "key": s.key,
             "value": "********" if s.sensitive and current else current,
@@ -177,8 +176,7 @@ def get_setting(key: str) -> dict[str, Any] | None:
     s = _SETTINGS_BY_KEY.get(key)
     if not s:
         return None
-    default: str = s.default
-    current = os.getenv(s.key, default)
+    current = os.getenv(s.key, str(s.default))
     return {
         "key": s.key,
         "value": "********" if s.sensitive and current else current,
