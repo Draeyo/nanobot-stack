@@ -121,3 +121,45 @@ class TestJobCRUD:
 
         jobs = mgr.list_jobs()
         assert len(jobs) == 2
+
+    def test_get_job_returns_none_for_missing(self, tmp_db):
+        from scheduler import SchedulerManager
+        mgr = SchedulerManager.__new__(SchedulerManager)
+        mgr._db_path = str(tmp_db)
+        mgr._scheduler = MagicMock()
+        mgr._scheduler.get_job.return_value = None
+        assert mgr.get_job("nonexistent") is None
+
+    def test_get_job_returns_job_with_parsed_sections(self, tmp_db):
+        _insert_job(tmp_db, "job-1")
+        from scheduler import SchedulerManager
+        mgr = SchedulerManager.__new__(SchedulerManager)
+        mgr._db_path = str(tmp_db)
+        mgr._scheduler = MagicMock()
+        mgr._scheduler.get_job.return_value = None
+        job = mgr.get_job("job-1")
+        assert job is not None
+        assert isinstance(job["sections"], list)
+        assert isinstance(job["channels"], list)
+        assert job["name"] == "Test Job"
+
+    def test_get_job_history_pagination(self, tmp_db):
+        _insert_job(tmp_db, "job-1")
+        now = datetime.now(timezone.utc).isoformat()
+        db = sqlite3.connect(str(tmp_db))
+        for i in range(5):
+            db.execute(
+                "INSERT INTO job_runs (id, job_id, started_at, status) VALUES (?,?,?,?)",
+                (f"run-{i}", "job-1", now, "ok")
+            )
+        db.commit()
+        db.close()
+
+        from scheduler import SchedulerManager
+        mgr = SchedulerManager.__new__(SchedulerManager)
+        mgr._db_path = str(tmp_db)
+
+        all_runs = mgr.get_job_history("job-1", limit=5, offset=0)
+        page = mgr.get_job_history("job-1", limit=2, offset=2)
+        assert len(all_runs) == 5
+        assert len(page) == 2

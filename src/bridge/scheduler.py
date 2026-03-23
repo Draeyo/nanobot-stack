@@ -151,6 +151,7 @@ class SchedulerManager:
         if "channels" in updates:
             updates["channels"] = json.dumps(updates["channels"])
         updates["updated_at"] = now
+        # Keys come only from the `allowed` set above — no user-controlled strings in the clause.
         set_clause = ", ".join(f"{k}=?" for k in updates)
         values = list(updates.values()) + [job_id]
         db = self._db()
@@ -209,6 +210,11 @@ class SchedulerManager:
         if not job.get("enabled", True):
             return
         try:
+            cron_kwargs = self._parse_cron(job["cron"])  # raises ValueError on invalid cron
+        except ValueError:
+            logger.error("Invalid cron expression for job %s: %s", job["id"], job["cron"])
+            raise  # propagate so create_job / update_job callers know scheduling failed
+        try:
             self._scheduler.add_job(
                 self._execute_job,
                 trigger="cron",
@@ -216,7 +222,7 @@ class SchedulerManager:
                 args=[job["id"]],
                 replace_existing=True,
                 max_instances=1,
-                **self._parse_cron(job["cron"]),
+                **cron_kwargs,
             )
         except Exception:
             logger.exception("Failed to schedule job %s", job["id"])
