@@ -1,6 +1,7 @@
 """BroadcastNotifier — fan-out messages to all configured delivery channels."""
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
@@ -21,8 +22,12 @@ class BroadcastNotifier:
 
     async def broadcast(self, channels: list[str], message: str) -> dict[str, bool]:
         """Send message to each channel. Returns {channel: success}."""
-        import asyncio
-        tasks = {ch: self._deliver(ch, message) for ch in channels if ch in VALID_CHANNELS}
+        tasks: dict[str, Any] = {}
+        for ch in channels:
+            if ch in VALID_CHANNELS:
+                tasks[ch] = self._deliver(ch, message)
+            else:
+                logger.warning("Unknown channel ignored: %s", ch)
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         return {ch: (not isinstance(r, Exception) and r) for ch, r in zip(tasks.keys(), results)}
 
