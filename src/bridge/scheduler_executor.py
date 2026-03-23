@@ -304,12 +304,11 @@ class JobExecutor:
     async def _call_llm(self, context: str, job_name: str) -> str:
         """Call LLM via AdaptiveRouter for briefing generation."""
         try:
-            import json as _json
             config_path = os.path.join(
                 os.path.dirname(__file__), "..", "config", "model_router.json"
             )
-            with open(config_path) as f:
-                router_cfg = _json.load(f)
+            with open(config_path, encoding="utf-8") as f:
+                router_cfg = json.load(f)
 
             task_routes = router_cfg.get("task_routes", {})
             candidates_keys = task_routes.get("briefing", task_routes.get("classify_query", []))

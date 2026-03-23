@@ -53,7 +53,7 @@ def _validate_topics_frequency(sections: list[str], cron: str) -> None:
         return
     try:
         from scheduler_executor import JobExecutor
-        if JobExecutor._cron_interval_minutes(cron) < 6 * 60:
+        if JobExecutor._cron_interval_minutes(cron) < 6 * 60:  # pylint: disable=protected-access
             raise HTTPException(400, detail="Section 'topics' cannot be used with cron intervals < 6h (LLM cost risk)")
     except HTTPException:
         raise
@@ -72,7 +72,7 @@ class JobCreate(BaseModel):
     @field_validator("timeout_s")
     @classmethod
     def timeout_range(cls, v: int) -> int:
-        if not (10 <= v <= 300):
+        if not 10 <= v <= 300:
             raise ValueError("timeout_s must be between 10 and 300")
         return v
 
@@ -147,7 +147,7 @@ def run_job_now(job_id: str, background_tasks: BackgroundTasks):
         raise HTTPException(404, detail="Job not found")
     if job.get("last_status") == "running":
         raise HTTPException(409, detail="Job is already running")
-    background_tasks.add_task(_manager._execute_job, job_id)
+    background_tasks.add_task(_manager._execute_job, job_id)  # pylint: disable=protected-access
     return {"queued": True, "job_id": job_id}
 
 
