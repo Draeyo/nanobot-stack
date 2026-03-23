@@ -13,18 +13,6 @@ from .base import AgentBase, AgentResult
 
 logger = logging.getLogger("rag-bridge.agents.ops")
 
-# Extended read-only commands for ops diagnostics
-OPS_EXTRA_COMMANDS: dict[str, bool | list[str]] = {
-    "ss": True,
-    "ps": ["aux"],
-    "top": ["-bn1"],
-    "netstat": ["-tlnp"],
-    "lsof": ["-i"],
-    "du": ["-sh"],
-    "last": True,
-    "w": True,
-}
-
 OPS_SYSTEM_PROMPT = """\
 You are an Ops/SysAdmin agent — a personal SRE for a self-hosted server.
 

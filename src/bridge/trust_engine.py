@@ -177,12 +177,10 @@ def check_and_execute(
             # Store rollback reference — the callable itself is not persisted,
             # but callers can pass a serialisable description in action_detail.
             rollback_info = f"rollback available for {action_type}"
-        _record_audit(action_type, action_detail, level, "success", rollback_info)
         record_outcome(action_type, action_detail, "success", rollback_info)
         return {"ok": True, "status": "executed", "result": result}
     except Exception:
         logger.exception("Auto-execute failed: %s", action_type)
-        _record_audit(action_type, action_detail, level, "failure")
         record_outcome(action_type, action_detail, "failure")
         return {"ok": False, "error": "action execution failed"}
 
@@ -429,7 +427,7 @@ def list_policies_endpoint(request: Request):
     """List all trust policies."""
     if _verify_token:
         _verify_token(request)
-    return get_policies()
+    return {"policies": get_policies()}
 
 
 @router.post("/policies/{action_type}")
@@ -452,7 +450,7 @@ def audit_endpoint(
     """Get trust audit log with optional filters."""
     if _verify_token:
         _verify_token(request)
-    return get_audit_log(limit=limit, action_type=action_type)
+    return {"entries": get_audit_log(limit=limit, action_type=action_type)}
 
 
 @router.post("/promote/{action_type}")

@@ -22,6 +22,7 @@ STATE_DIR = pathlib.Path(os.getenv("STATE_DIR", "/opt/nanobot-stack/rag-bridge/s
 DB_PATH = STATE_DIR / "knowledge_graph.db"
 
 _lock = threading.Lock()
+_v10_migrated = False
 
 ENTITY_TYPES = ["person", "project", "technology", "concept", "organization",
                  "decision", "event", "deadline", "location", "tool", "workflow", "preference"]
@@ -74,26 +75,29 @@ def _get_conn() -> sqlite3.Connection:
     db.execute("CREATE INDEX IF NOT EXISTS idx_relations_source ON relations(source)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_relations_target ON relations(target)")
     db.execute("CREATE INDEX IF NOT EXISTS idx_entities_type ON entities(type)")
-    # v10 schema additions (safe: try/except for older SQLite)
-    for col, spec in [
-        ("updated_at", "TEXT DEFAULT ''"),
-        ("confidence", "REAL DEFAULT 1.0"),
-        ("source", "TEXT DEFAULT 'conversation'"),
-        ("aliases", "TEXT DEFAULT '[]'"),
-    ]:
-        try:
-            db.execute(f"ALTER TABLE entities ADD COLUMN {col} {spec}")
-        except sqlite3.OperationalError:
-            pass  # column already exists
-    for col, spec in [
-        ("last_confirmed", "TEXT DEFAULT ''"),
-        ("source", "TEXT DEFAULT 'conversation'"),
-        ("confidence", "REAL DEFAULT 1.0"),
-    ]:
-        try:
-            db.execute(f"ALTER TABLE relations ADD COLUMN {col} {spec}")
-        except sqlite3.OperationalError:
-            pass
+    # v10 schema additions — run once per process
+    global _v10_migrated  # pylint: disable=global-statement
+    if not _v10_migrated:
+        for col, spec in [
+            ("updated_at", "TEXT DEFAULT ''"),
+            ("confidence", "REAL DEFAULT 1.0"),
+            ("source", "TEXT DEFAULT 'conversation'"),
+            ("aliases", "TEXT DEFAULT '[]'"),
+        ]:
+            try:
+                db.execute(f"ALTER TABLE entities ADD COLUMN {col} {spec}")
+            except sqlite3.OperationalError:
+                pass  # column already exists
+        for col, spec in [
+            ("last_confirmed", "TEXT DEFAULT ''"),
+            ("source", "TEXT DEFAULT 'conversation'"),
+            ("confidence", "REAL DEFAULT 1.0"),
+        ]:
+            try:
+                db.execute(f"ALTER TABLE relations ADD COLUMN {col} {spec}")
+            except sqlite3.OperationalError:
+                pass
+        _v10_migrated = True
     return db
 
 
