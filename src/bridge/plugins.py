@@ -119,7 +119,7 @@ class PluginRegistry:
         for attr_name in dir(module):
             obj = getattr(module, attr_name)
             if callable(obj) and hasattr(obj, "_plugin_tool"):
-                tool_meta = obj._plugin_tool
+                tool_meta = obj._plugin_tool  # pylint: disable=protected-access
                 tool = PluginTool(
                     name=tool_meta.get("name", attr_name),
                     description=tool_meta.get("description", ""),
@@ -132,7 +132,7 @@ class PluginRegistry:
         for attr_name in dir(module):
             obj = getattr(module, attr_name)
             if callable(obj) and hasattr(obj, "_plugin_hook"):
-                hook_meta = obj._plugin_hook
+                hook_meta = obj._plugin_hook  # pylint: disable=protected-access
                 hook = PluginHook(
                     event=hook_meta.get("event", ""),
                     fn=obj,
@@ -221,7 +221,7 @@ class PluginRegistry:
 def plugin_tool(name: str = "", description: str = ""):
     """Decorator to mark a function as a plugin tool."""
     def decorator(fn):
-        fn._plugin_tool = {
+        fn._plugin_tool = {  # pylint: disable=protected-access
             "name": name or fn.__name__,
             "description": description or fn.__doc__ or "",
         }
@@ -236,7 +236,7 @@ def plugin_hook(event: str, priority: int = 100):
             'pre_remember', 'post_remember', 'pre_chat', 'post_chat'.
     """
     def decorator(fn):
-        fn._plugin_hook = {"event": event, "priority": priority}
+        fn._plugin_hook = {"event": event, "priority": priority}  # pylint: disable=protected-access
         return fn
     return decorator
 

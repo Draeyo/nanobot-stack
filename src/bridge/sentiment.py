@@ -60,9 +60,6 @@ def detect_tone(message: str) -> dict[str, Any]:
         scores["urgent"] += 2
         scores["frustrated"] += 1
 
-    # Question marks with no other signals = neutral/inquisitive
-    q_count = message.count("?")
-
     top_tone = max(scores, key=lambda k: scores[k])
     top_score = scores[top_tone]
 

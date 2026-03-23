@@ -165,9 +165,7 @@ except Exception as exc:
 def _shutdown():
     token_tracker.flush()
     try:
-        from file_watcher import FileWatcher
-        # File watcher instance may have been stored on app state
-        watcher = getattr(app, "_file_watcher", None)
+        watcher = getattr(app.state, "file_watcher", None)
         if watcher:
             watcher.stop()
     except Exception:
@@ -1232,7 +1230,7 @@ try:
         _watcher_dirs = list(COLLECTION_DIR_MAP.values())
         _file_watcher = FileWatcher(_watcher_dirs, _background_ingest)
         _file_watcher.start()
-        app._file_watcher = _file_watcher
+        app.state.file_watcher = _file_watcher
         logger.info("File watcher started for %d directories", len(_watcher_dirs))
 except Exception as exc:
     logger.info("File watcher not started: %s", exc)

@@ -1,7 +1,6 @@
 """Discord channel adapter using discord.py (soft import)."""
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 from typing import Any
@@ -20,9 +19,9 @@ class DiscordAdapter(ChannelAdapter):
     def __init__(self) -> None:
         super().__init__()
         self._token = DISCORD_BOT_TOKEN
-        self._allowed_channels: set[str] = set()
+        self.allowed_channels: set[str] = set()
         if DISCORD_ALLOWED_CHANNEL_IDS:
-            self._allowed_channels = {c.strip() for c in DISCORD_ALLOWED_CHANNEL_IDS.split(",") if c.strip()}
+            self.allowed_channels = {c.strip() for c in DISCORD_ALLOWED_CHANNEL_IDS.split(",") if c.strip()}
         self._client = None
 
     def is_configured(self) -> bool:
@@ -54,7 +53,7 @@ class DiscordAdapter(ChannelAdapter):
             if message.author.bot:
                 return
             # Access control
-            if adapter._allowed_channels and str(message.channel.id) not in adapter._allowed_channels:
+            if adapter.allowed_channels and str(message.channel.id) not in adapter.allowed_channels:
                 return
 
             if not message.content:

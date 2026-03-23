@@ -46,7 +46,7 @@ class WhatsAppAdapter(ChannelAdapter):
         global _adapter_instance
         _adapter_instance = None
 
-    async def send_message(self, to_number: str, text: str) -> dict[str, Any]:
+    async def send_message(self, channel_id: str, text: str) -> dict[str, Any]:
         url = f"https://graph.facebook.com/{WHATSAPP_API_VERSION}/{self._phone_id}/messages"
         headers = {
             "Authorization": f"Bearer {self._token}",
@@ -59,7 +59,7 @@ class WhatsAppAdapter(ChannelAdapter):
             for chunk in chunks:
                 payload = {
                     "messaging_product": "whatsapp",
-                    "to": to_number,
+                    "to": channel_id,
                     "type": "text",
                     "text": {"body": chunk},
                 }

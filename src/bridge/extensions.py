@@ -6,7 +6,6 @@ Adds: /classify, /conversation-hook, /context-prefetch, /summarize-conversation,
 /code-execute, /plugins, /query-rewrite, /working-memory
 """
 from __future__ import annotations
-import asyncio
 import json, logging
 from typing import Any
 
@@ -339,8 +338,8 @@ def plan_endpoint(body: PlanIn, request: Request):
         from tools import send_notification
         return asyncio.run(send_notification(msg))
 
-    tool_fns = dict(search_fn=simple_search, ask_fn=simple_ask, remember_fn=simple_remember,
-                    shell_fn=simple_shell, web_fn=simple_web_fetch, notify_fn=simple_notify)
+    tool_fns = {"search_fn": simple_search, "ask_fn": simple_ask, "remember_fn": simple_remember,
+                "shell_fn": simple_shell, "web_fn": simple_web_fetch, "notify_fn": simple_notify}
 
     if body.parallel:
         execution = execute_plan_parallel(plan_result["plan"], _run_chat_fn, **tool_fns)
@@ -409,7 +408,7 @@ def _smart_chat_inner(body: SmartChatIn) -> dict[str, Any]:
 
     # 1. Sentiment detection
     try:
-        from sentiment import detect_session_tone, build_tone_system_prompt
+        from sentiment import detect_session_tone
         tone_info = detect_session_tone(body.messages)
         meta["tone"] = tone_info
     except Exception:

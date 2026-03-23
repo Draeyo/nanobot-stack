@@ -13,7 +13,6 @@ from __future__ import annotations
 import io
 import logging
 import os
-import sys
 import threading
 import traceback
 from contextlib import redirect_stderr, redirect_stdout

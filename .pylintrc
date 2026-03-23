@@ -27,7 +27,9 @@ disable=
     R0915,  # too-many-statements
     R1705,  # no-else-return
     R0801,  # duplicate-code
+    R0902,  # too-many-instance-attributes
     R1702,  # too-many-nested-blocks
+    W0122,  # exec-used (sandboxed code interpreter)
     W1309,  # f-string-without-interpolation
 
 [DESIGN]

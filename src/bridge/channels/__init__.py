@@ -31,22 +31,18 @@ class ChannelAdapter(ABC):
     @abstractmethod
     async def start(self) -> None:
         """Start the adapter (long-polling, websocket, or webhook listening)."""
-        ...
 
     @abstractmethod
     async def stop(self) -> None:
         """Gracefully stop the adapter."""
-        ...
 
     @abstractmethod
     async def send_message(self, channel_id: str, text: str) -> dict[str, Any]:
         """Send a message to a specific channel/user."""
-        ...
 
     @abstractmethod
     def is_configured(self) -> bool:
         """Check if this adapter has the required credentials configured."""
-        ...
 
     async def handle_incoming(self, platform_user_id: str, text: str,
                                platform_name: str,
