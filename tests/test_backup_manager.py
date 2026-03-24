@@ -1,13 +1,11 @@
 """Tests for BackupManager."""
-# pylint: disable=protected-access
+# pylint: disable=protected-access,wrong-import-position
 from __future__ import annotations
 
-import base64
 import os
 import sqlite3
 import sys
 import tarfile
-import tempfile
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -52,7 +50,7 @@ def _make_backup_db(tmp_path: Path) -> Path:
 
 def _make_manager(tmp_path: Path, **overrides) -> BackupManager:
     """Create a BackupManager pointed at tmp_path, with BACKUP_ENABLED=true."""
-    db_path = _make_backup_db(tmp_path)
+    _make_backup_db(tmp_path)
     settings = {
         "BACKUP_ENABLED": True,
         "BACKUP_LOCAL_PATH": str(tmp_path / "backups"),
@@ -90,7 +88,7 @@ class TestSnapshotQdrantMock:
         fake_content = b"fake-snapshot-data-xyz"
 
         # Build a fake streaming response for the download
-        async def _aiter_bytes(chunk_size=65536):
+        async def _aiter_bytes(**_kwargs):
             yield fake_content
 
         mock_stream_resp = MagicMock()
@@ -103,9 +101,9 @@ class TestSnapshotQdrantMock:
 
         # Context manager for stream
         class _FakeStreamCtx:
-            async def __aenter__(self_inner):
+            async def __aenter__(self):
                 return mock_stream_resp
-            async def __aexit__(self_inner, *args):
+            async def __aexit__(self, *args):
                 pass
 
         mock_client = MagicMock()
@@ -113,9 +111,9 @@ class TestSnapshotQdrantMock:
         mock_client.stream = MagicMock(return_value=_FakeStreamCtx())
 
         class _FakeClientCtx:
-            async def __aenter__(self_inner):
+            async def __aenter__(self):
                 return mock_client
-            async def __aexit__(self_inner, *args):
+            async def __aexit__(self, *args):
                 pass
 
         with patch("backup_manager.httpx.AsyncClient", return_value=_FakeClientCtx()):

@@ -92,7 +92,7 @@ def _fake_feedparser_result(entries: list[dict]) -> MagicMock:
 class TestMigrationCreatesTables:
     def test_migration_creates_tables(self, tmp_path):
         """013_rss.migrate() should create rss_feeds and rss_entries in rss.db."""
-        import importlib.util, os
+        import importlib.util
         migration_path = (
             Path(__file__).parent.parent / "migrations" / "013_rss.py"
         )
@@ -211,7 +211,6 @@ class TestFetchFeed:
             ingestor = _make_ingestor(tmp_path)
             # Insert a feed manually
             import uuid
-            from datetime import datetime, timezone
             now = datetime.now(timezone.utc).isoformat()
             feed_id = str(uuid.uuid4())
             db = ingestor._connect()
@@ -238,7 +237,6 @@ class TestFetchFeed:
     async def test_fetch_feed_dedup(self, tmp_path):
         """Entry URL already in rss_entries → not returned."""
         import uuid
-        from datetime import datetime, timezone
 
         ingestor = _make_ingestor(tmp_path)
         now = datetime.now(timezone.utc).isoformat()
@@ -313,7 +311,6 @@ class TestEmbedAndUpsert:
         ingestor = _make_ingestor(tmp_path, qdrant=mock_qdrant)
 
         with patch("litellm.aembedding", new=AsyncMock(return_value=fake_embedding_resp)):
-            from qdrant_client.models import PointStruct  # noqa: F401
             count = await ingestor.embed_and_upsert(entries)
 
         assert count == 1

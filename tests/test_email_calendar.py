@@ -1,8 +1,7 @@
 """Tests for email_calendar.EmailCalendarFetcher."""
+# pylint: disable=redefined-outer-name,protected-access,attribute-defined-outside-init
 from __future__ import annotations
 
-import email as stdlib_email
-import imaplib
 import os
 import sqlite3
 import sys
@@ -10,7 +9,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from email.mime.text import MIMEText
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -47,7 +46,7 @@ def _make_raw_email(
     return msg.as_bytes()
 
 
-def _make_fetcher(enabled: bool = True, tmp_db: Path | None = None, **env_overrides):
+def _make_fetcher(enabled: bool = True, db_path: Path | None = None, **env_overrides):
     """Helper: patch env vars and return an EmailCalendarFetcher."""
     env = {
         "EMAIL_CALENDAR_ENABLED": "true" if enabled else "false",
@@ -64,8 +63,8 @@ def _make_fetcher(enabled: bool = True, tmp_db: Path | None = None, **env_overri
     with patch.dict(os.environ, env, clear=False):
         from email_calendar import EmailCalendarFetcher
         fetcher = EmailCalendarFetcher()
-        if tmp_db:
-            fetcher._db_path = str(tmp_db)
+        if db_path:
+            fetcher._db_path = str(db_path)
         return fetcher
 
 
@@ -235,7 +234,7 @@ async def test_important_filter_heuristic():
     ]
 
     # fetch is called for each message id
-    def fetch_side_effect(mid, spec):
+    def fetch_side_effect(mid, _spec):
         if mid == b"1":
             return ("OK", [(b"1 (BODY[HEADER])", raw_flagged), b")", (b"1 (BODY[TEXT])", b"body"), b")"])
         return ("OK", [(b"2 (BODY[HEADER])", raw_plain), b")", (b"2 (BODY[TEXT])", b"body"), b")"])
@@ -275,8 +274,6 @@ def _make_mock_icalendar():
 
         def walk(self):
             # Parse dates from the fixture ICS — simple fixed return
-            from datetime import datetime, timezone
-
             class FakeVEvent:
                 name = "VEVENT"
 
@@ -308,7 +305,7 @@ def _make_mock_icalendar():
             class FakeCalComp:
                 name = "VCALENDAR"
 
-                def get(self, key, default=""):
+                def get(self, _key, default=""):
                     return default
 
             return [FakeCalComp(), FakeVEvent(), FakeVEvent2()]
@@ -320,8 +317,7 @@ def _make_mock_icalendar():
 @pytest.mark.asyncio
 async def test_ics_fetch_local():
     """Parse local ICS fixture file — events in next-24h window returned."""
-    # Events are dated 2026-03-24T09:00Z and 14:30Z — simulate 'now' as same day 00:00Z
-    fake_now = datetime(2026, 3, 24, 0, 0, 0, tzinfo=timezone.utc)
+    # Events are dated 2026-03-24T09:00Z and 14:30Z
     mock_ical = _make_mock_icalendar()
 
     with patch.dict(sys.modules, {"icalendar": mock_ical}), \
@@ -375,7 +371,13 @@ async def test_ics_fetch_fields():
 @pytest.mark.asyncio
 async def test_caldav_fetch_mock():
     """Mock caldav.DAVClient — fetch_today_agenda returns filtered events."""
-    ics_data = b"""BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:caldav-evt-001@test\r\nSUMMARY:CalDAV Meeting\r\nDTSTART:20260324T100000Z\r\nDTEND:20260324T110000Z\r\nLOCATION:Online\r\nDESCRIPTION:Remote meeting\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"""
+    ics_data = (
+        b"BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\n"
+        b"UID:caldav-evt-001@test\r\nSUMMARY:CalDAV Meeting\r\n"
+        b"DTSTART:20260324T100000Z\r\nDTEND:20260324T110000Z\r\n"
+        b"LOCATION:Online\r\nDESCRIPTION:Remote meeting\r\n"
+        b"END:VEVENT\r\nEND:VCALENDAR\r\n"
+    )
 
     mock_event = MagicMock()
     mock_event.data = ics_data
