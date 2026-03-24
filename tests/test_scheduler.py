@@ -254,7 +254,7 @@ class TestJobExecutorRun:
 
 class TestJobRegistry:
     def test_seeds_three_system_jobs(self, tmp_db):
-        from scheduler_registry import JobRegistry
+        from scheduler_registry import JobRegistry, SYSTEM_JOBS
         mgr_mock = MagicMock()
         mgr_mock._db_path = str(tmp_db)
         mgr_mock.list_jobs.return_value = []
@@ -262,7 +262,7 @@ class TestJobRegistry:
         registry = JobRegistry(mgr_mock)
         registry.seed()
 
-        assert mgr_mock.create_job.call_count == 3
+        assert mgr_mock.create_job.call_count == len(SYSTEM_JOBS)
 
     def test_does_not_seed_if_system_jobs_exist(self):
         from scheduler_registry import JobRegistry
@@ -276,11 +276,11 @@ class TestJobRegistry:
 
     def test_seeds_even_if_custom_jobs_exist(self):
         """If only custom (non-system) jobs exist, system jobs should still be seeded."""
-        from scheduler_registry import JobRegistry
+        from scheduler_registry import JobRegistry, SYSTEM_JOBS
         mgr_mock = MagicMock()
         mgr_mock.list_jobs.return_value = [{"id": "custom-1", "system": 0}]
 
         registry = JobRegistry(mgr_mock)
         registry.seed()
 
-        assert mgr_mock.create_job.call_count == 3
+        assert mgr_mock.create_job.call_count == len(SYSTEM_JOBS)
