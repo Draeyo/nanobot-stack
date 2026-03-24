@@ -30,6 +30,14 @@ SYSTEM_JOBS = [
         "prompt": "Voici le bilan de la semaine.",
         "timeout_s": 120,
     },
+    {
+        "name": "RSS Sync",
+        "cron": "*/30 * * * *",
+        "sections": ["rss_sync"],
+        "channels": [],
+        "prompt": "",
+        "timeout_s": 120,
+    },
 ]
 
 

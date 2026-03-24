@@ -22,6 +22,8 @@ SECTION_LABELS = {
     "custom": "Note personnalisée",
     "agenda": "Agenda du jour",
     "email_digest": "Résumé emails",
+    "rss_digest": "Actualités RSS",
+    "rss_sync": "Synchronisation RSS",
 }
 
 
@@ -215,6 +217,40 @@ class JobExecutor:
             logger.exception("agenda section error")
             return f"agenda error: {e}"
 
+    async def _run_rss_sync(self) -> str:
+        """Trigger sync_all_feeds for the system RSS Sync job. Returns a status string."""
+        rss_enabled = os.getenv("RSS_ENABLED", "false").lower() in ("1", "true", "yes")
+        if not rss_enabled:
+            return ""
+        try:
+            from rss_ingestor import RssIngestor  # type: ignore[import]
+            state_dir = os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state")
+            ingestor = RssIngestor(state_dir=state_dir, qdrant_client=self._qdrant)
+            result = await ingestor.sync_all_feeds()
+            return (
+                f"RSS sync completed: {result.get('feeds_synced', 0)} feeds, "
+                f"{result.get('new_articles', 0)} new articles"
+            )
+        except Exception as e:
+            logger.exception("rss_sync job error")
+            return f"rss_sync error: {e}"
+
+    async def _collect_rss_digest(self, since_hours: int = 24) -> str:
+        """Collect recent RSS articles grouped by category as markdown digest."""
+        rss_enabled = os.getenv("RSS_ENABLED", "false").lower() in ("1", "true", "yes")
+        if not rss_enabled:
+            return ""
+        if not self._qdrant:
+            return ""
+        try:
+            from rss_ingestor import RssIngestor  # type: ignore[import]
+            state_dir = os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state")
+            ingestor = RssIngestor(state_dir=state_dir, qdrant_client=self._qdrant)
+            return await ingestor.collect_digest(since_hours=since_hours)
+        except Exception as e:
+            logger.exception("rss_digest section error")
+            return f"rss_digest error: {e}"
+
     async def _collect_email_digest(self, since_hours: int = 24) -> str:
         """Fetch recent important emails and summarise with LLM."""
         try:
@@ -297,6 +333,10 @@ class JobExecutor:
                 tasks[sec] = self._collect_agenda()
             elif sec == "email_digest":
                 tasks[sec] = self._collect_email_digest(since_hours=email_window_h)
+            elif sec == "rss_digest":
+                tasks[sec] = self._collect_rss_digest(since_hours=email_window_h)
+            elif sec == "rss_sync":
+                tasks[sec] = self._run_rss_sync()
 
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         section_data = dict(zip(tasks.keys(), results))
