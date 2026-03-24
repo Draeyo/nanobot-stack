@@ -217,44 +217,181 @@ Les onglets suivants sont spécifiés dans le v10 evolution design mais pas enco
 | Procedural Workflows | Liste workflows appris, confiance, toggles replay | 🔧 |
 | Agent Status | Agents disponibles, exécutions récentes, coût par agent | 🔧 |
 
-### 4.2 Intégrations Futures 💡
+### 4.2 Sous-projet D — Recherche Web (SearXNG) 📋
 
-| Feature | Prérequis | Description |
-|---------|-----------|-------------|
-| Sous-projet D : WebSearch proactive | RSS (C) | Recherche web déclenchée par topics d'intérêt |
-| Sous-projet E : Memory decay actif | Mémoire procédurale | Suppression automatique mémoires obsolètes |
-| Sous-projet F : Multi-utilisateur | DM pairing, trust | Profils séparés par utilisateur |
+Spec : [`2026-03-24-sub-project-d-web-search.md`](2026-03-24-sub-project-d-web-search.md)
+
+| Feature | Fichier | Statut | Description |
+|---------|---------|--------|-------------|
+| WebSearchAgent | `agents/web_search_agent.py` | 📋 | Agent étendant AgentBase, interroge SearXNG |
+| SearXNG Docker | `docker-compose.yml` | 📋 | Service SearXNG sur réseau privé |
+| Tool `web_search` | `src/mcp/` | 📋 | Outil MCP pour OrchestratorAgent |
+| Collection Qdrant | `web_search_results` | 📋 | Résultats cachés, TTL 6h |
+| Section briefing | `scheduler_executor.py` | 📋 | Section `web_digest` — top résultats sur topics configurés |
+| Table SQLite | `web_search_log` | 📋 | Historique requêtes, rate limiting |
+| API REST | `web_search_api.py` | 📋 | `POST /tools/web-search` |
+
+### 4.3 Sous-projet E — Ingestion Documents Locaux 📋
+
+Spec : [`2026-03-24-sub-project-e-local-docs.md`](2026-03-24-sub-project-e-local-docs.md)
+
+| Feature | Fichier | Statut | Description |
+|---------|---------|--------|-------------|
+| LocalDocIngestor | `local_doc_ingestor.py` | 📋 | Ingestion PDF, MD, TXT, DOCX |
+| LocalDocWatcher | `local_doc_ingestor.py` | 📋 | Surveillance dossier en temps réel (watchdog) |
+| Extension `docs_reference` | Qdrant | 📋 | Nouveaux champs payload : source_path, file_hash, chunk_index |
+| Table SQLite | `docs_ingestion_log` | 📋 | Migration 014 |
+| API REST | `local_docs_api.py` | 📋 | CRUD + status + upload manuel |
+
+**Dépendances Python :** `pypdf>=3.0`, `python-docx>=1.0`, `watchdog>=3.0`
+
+### 4.4 Sous-projet F — Backup & Restore Automatique 📋
+
+Spec : [`2026-03-24-sub-project-f-backup-restore.md`](2026-03-24-sub-project-f-backup-restore.md)
+
+| Feature | Fichier | Statut | Description |
+|---------|---------|--------|-------------|
+| BackupManager | `backup_manager.py` | 📋 | Snapshots Qdrant + SQLite, archive .tar.gz |
+| Chiffrement archives | `backup_manager.py` | 📋 | AES-256 Fernet optionnel |
+| Stockage S3 | `backup_manager.py` | 📋 | Backblaze B2 / AWS S3 / MinIO via boto3 |
+| Job cron | `scheduler_registry.py` | 📋 | Backup quotidien à 3h par défaut |
+| Script restore | `scripts/restore.sh` | 📋 | Restore manuel avec prompts de sécurité |
+| Table SQLite | `backup_log` | 📋 | Migration 015 |
+| API REST | `backup_api.py` | 📋 | Trigger, list, status, delete |
+
+**Dépendances Python :** `cryptography>=42.0`, `boto3>=1.34` (optionnel si S3)
+
+### 4.5 Sous-projet G — Interface Vocale (STT/TTS) 📋
+
+Spec : [`2026-03-24-sub-project-g-voice-interface.md`](2026-03-24-sub-project-g-voice-interface.md)
+
+| Feature | Fichier | Statut | Description |
+|---------|---------|--------|-------------|
+| VoiceProcessor | `voice_processor.py` | 📋 | Pipeline STT (faster-whisper) + TTS (Piper) |
+| Docker Piper | `docker-compose.yml` | 📋 | Service `piper` sur réseau privé |
+| Endpoint transcription | `voice_api.py` | 📋 | `POST /api/voice/transcribe` — audio → texte |
+| Endpoint synthèse | `voice_api.py` | 📋 | `POST /api/voice/synthesize` — texte → audio MP3 |
+| Endpoint chat vocal | `voice_api.py` | 📋 | `POST /api/voice/chat` — round-trip complet |
+| Interface Admin UI | `admin_ui.py` | 📋 | Bouton micro dans l'onglet Chat |
+| Table SQLite | `voice_sessions` | 📋 | Métriques sessions, pas d'audio stocké |
+
+**Dépendances Python :** `faster-whisper>=1.0`
+
+### 4.6 Sous-projet H — Memory Decay & Boucle de Feedback 📋
+
+Spec : [`2026-03-24-sub-project-h-memory-decay.md`](2026-03-24-sub-project-h-memory-decay.md)
+
+| Feature | Fichier | Statut | Description |
+|---------|---------|--------|-------------|
+| MemoryDecayManager | `memory_decay.py` | 📋 | Dégradation exponentielle + seuil suppression |
+| FeedbackLearner | `feedback_learner.py` | 📋 | Ajustement routing depuis feedbacks utilisateur |
+| Job cron hebdo | `scheduler_registry.py` | 📋 | Scan decay toutes les collections permanentes |
+| Extension table `feedback` | `rag.db` | 📋 | Ajout colonnes query_type, model_used, correction_text |
+| Table `routing_adjustments` | SQLite | 📋 | Scores d'ajustement par type/modèle |
+| Table `memory_decay_log` | SQLite | 📋 | Audit suppressions (migration 016) |
+| API REST | `memory_api.py` | 📋 | Decay stats, feedback, forget, routing adjustments |
+
+### 4.7 Sous-projet I — Progressive Web App Mobile 📋
+
+Spec : [`2026-03-24-sub-project-i-pwa-mobile.md`](2026-03-24-sub-project-i-pwa-mobile.md)
+
+| Feature | Fichier | Statut | Description |
+|---------|---------|--------|-------------|
+| Manifest PWA | `static/manifest.json` | 📋 | Installable sur mobile, display:standalone |
+| Service Worker | `static/sw.js` | 📋 | Cache assets, offline fallback, push handler |
+| Interface mobile | `admin_ui.py` | 📋 | Vue chat responsive (< 768px) avec Alpine.js |
+| Push Notifications | `push_notifications.py` | 📋 | VAPID keys, Web Push API |
+| BroadcastNotifier | `broadcast_notifier.py` | 📋 | Nouveau canal `webpush` |
+| Table SQLite | `push_subscriptions` | 📋 | Migration 017 |
+
+**Dépendances Python :** `pywebpush>=2.0`
+
+### 4.8 Sous-projet J — Intégrations Développeur (GitHub & Obsidian) 📋
+
+Spec : [`2026-03-24-sub-project-j-dev-integrations.md`](2026-03-24-sub-project-j-dev-integrations.md)
+
+| Feature | Fichier | Statut | Description |
+|---------|---------|--------|-------------|
+| GitHubSyncer | `dev_integrations.py` | 📋 | Sync PRs, issues, commits via API GitHub |
+| ObsidianIngestor | `obsidian_ingestor.py` | 📋 | Extension LocalDocIngestor + YAML frontmatter + WikiLinks |
+| Section briefing | `scheduler_executor.py` | 📋 | Section `dev_digest` — activité GitHub du jour |
+| Extension `memory_projects` | Qdrant | 📋 | Nouveaux payloads `source:github` |
+| Table SQLite | `github_sync_log` | 📋 | Migration 018 |
+| Table SQLite | `obsidian_index` | 📋 | Backlinks WikiLink tracking |
+
+**Dépendances Python :** `PyGithub>=2.0`
+
+### 4.9 Sous-projet K — Browser Automation (Playwright) 📋
+
+Spec : [`2026-03-24-sub-project-k-browser-automation.md`](2026-03-24-sub-project-k-browser-automation.md)
+
+| Feature | Fichier | Statut | Description |
+|---------|---------|--------|-------------|
+| BrowserAgent | `agents/browser_agent.py` | 📋 | Agent Playwright headless, étend AgentBase |
+| Docker Playwright | `docker-compose.yml` | 📋 | Sidecar Chromium sandboxé |
+| Trust integration | `trust_engine.py` | 📋 | Niveaux par action : read/fill/submit |
+| Domain allowlist | `browser_agent.py` | 📋 | `BROWSER_ALLOWED_DOMAINS` — réseau restreint |
+| Collection Qdrant | `browser_screenshots` | 📋 | Screenshots optionnels, TTL 24h |
+| Table SQLite | `browser_action_log` | 📋 | Migration 019 |
+| API REST | `browser_api.py` | 📋 | `POST /api/browser/run` + logs |
+
+**Dépendances Python :** `playwright>=1.44`
+
+### 4.10 Sous-projet L — Chiffrement At-Rest 📋
+
+Spec : [`2026-03-24-sub-project-l-encryption-at-rest.md`](2026-03-24-sub-project-l-encryption-at-rest.md)
+
+| Feature | Fichier | Statut | Description |
+|---------|---------|--------|-------------|
+| FieldEncryptor | `encryption.py` | 📋 | AES-256-GCM, HKDF, préfixe `enc:v1:` |
+| Chiffrement SQLite | Injecteur dans tous les modules | 📋 | Champs sensibles : entities.value, feedback.correction |
+| Chiffrement Qdrant | Dans chaque ingestor | 📋 | Payloads memory_personal, email_inbox, calendar_events |
+| Key rotation | `encryption_api.py` | 📋 | Re-chiffrement en ligne |
+| Migration enable/disable | `encryption_api.py` | 📋 | Idempotent, check préfixe enc:v1: |
+| API REST | `encryption_api.py` | 📋 | Status, enable, disable, rotate, migration-status |
+| Documentation FS | `README.md` | 📋 | eCryptfs/LUKS setup — approche recommandée |
+
+**Dépendances Python :** `cryptography>=42.0` (déjà requis par sous-projet F)
 
 ---
 
 ## Collections Qdrant — Vue d'ensemble
 
-| Collection | Usage | TTL |
-|------------|-------|-----|
-| `docs_reference` | Documents de référence ingérés | Permanent |
-| `memory_personal` | Notes personnelles, mémoires | Permanent |
-| `ops_runbooks` | Runbooks SRE/ops | Permanent |
-| `memory_projects` | Contexte projets | Permanent |
-| `conversation_summaries` | Résumés conversations | Permanent |
-| `semantic_cache` | Cache requêtes LLM | 86400s (24h) |
-| `procedural_workflows` | Embeddings triggers workflows | Permanent |
-| `email_inbox` | Emails récents *(sous-projet B)* | 7 jours |
-| `calendar_events` | Événements calendrier *(sous-projet B)* | 30 jours |
-| `rss_articles` | Articles RSS ingérés *(sous-projet C)* | 30 jours |
+| Collection | Usage | TTL | Sous-projet |
+|------------|-------|-----|-------------|
+| `docs_reference` | Documents de référence ingérés | Permanent | Core |
+| `memory_personal` | Notes personnelles, mémoires | Permanent | Core |
+| `ops_runbooks` | Runbooks SRE/ops | Permanent | Core |
+| `memory_projects` | Contexte projets | Permanent | Core |
+| `conversation_summaries` | Résumés conversations | Permanent | Core |
+| `semantic_cache` | Cache requêtes LLM | 86400s (24h) | Core |
+| `procedural_workflows` | Embeddings triggers workflows | Permanent | Core |
+| `email_inbox` | Emails récents | 7 jours | B |
+| `calendar_events` | Événements calendrier | 30 jours | B |
+| `rss_articles` | Articles RSS ingérés | 30 jours | C |
+| `web_search_results` | Résultats SearXNG cachés | 6h | D |
+| `browser_screenshots` | Captures écran Browser Agent | 24h | K |
 
 ---
 
 ## Bases SQLite — Vue d'ensemble
 
-| Base | Tables principales | Géré par |
-|------|--------------------|---------|
-| `rag.db` | `knowledge_entities`, `knowledge_relations`, `feedback`, `dm_pairing` | `app.py` |
-| `scheduler.db` | `scheduled_jobs`, `job_runs` | `scheduler.py` |
-| `trust.db` | `trust_policies`, `trust_audit` | `trust_engine.py` |
-| `procedural_memory.db` | `action_sequences`, `action_log` | `procedural_memory.py` |
-| `token_budgets.db` | `token_budgets`, `token_usage_log` | `token_budget.py` |
-| `scheduler.db` *(ajout B)* | `email_sync_log` | `email_calendar.py` |
-| `rss.db` *(sous-projet C)* | `rss_feeds`, `rss_entries` | `rss_ingestor.py` |
+| Base | Tables principales | Géré par | Sous-projet |
+|------|--------------------|---------|-------------|
+| `rag.db` | `knowledge_entities`, `knowledge_relations`, `feedback`, `dm_pairing` | `app.py` | Core |
+| `scheduler.db` | `scheduled_jobs`, `job_runs`, `email_sync_log` | `scheduler.py` | A, B |
+| `trust.db` | `trust_policies`, `trust_audit` | `trust_engine.py` | Core |
+| `procedural_memory.db` | `action_sequences`, `action_log` | `procedural_memory.py` | Core |
+| `token_budgets.db` | `token_budgets`, `token_usage_log` | `token_budget.py` | Core |
+| `rss.db` | `rss_feeds`, `rss_entries` | `rss_ingestor.py` | C |
+| `scheduler.db` | `web_search_log` | `web_search_api.py` | D |
+| `scheduler.db` | `docs_ingestion_log` | `local_doc_ingestor.py` | E |
+| `scheduler.db` | `backup_log` | `backup_manager.py` | F |
+| `scheduler.db` | `voice_sessions` | `voice_processor.py` | G |
+| `rag.db` | `memory_decay_log`, `routing_adjustments` | `memory_decay.py` | H |
+| `scheduler.db` | `push_subscriptions` | `push_notifications.py` | I |
+| `scheduler.db` | `github_sync_log`, `obsidian_index` | `dev_integrations.py` | J |
+| `scheduler.db` | `browser_action_log` | `browser_agent.py` | K |
 
 ---
 
@@ -311,13 +448,37 @@ Les onglets suivants sont spécifiés dans le v10 evolution design mais pas enco
 
 ---
 
+## Numérotation des migrations SQLite
+
+| Migration | Table(s) | Sous-projet |
+|-----------|----------|-------------|
+| 011 | `scheduled_jobs`, `job_runs` | A |
+| 012 | `email_sync_log` | B |
+| 013 | `rss_feeds`, `rss_entries` | C |
+| 014 | `docs_ingestion_log` | E |
+| 015 | `backup_log` | F |
+| 016 | `memory_decay_log`, `routing_adjustments` | H |
+| 017 | `push_subscriptions` | I |
+| 018 | `github_sync_log`, `obsidian_index` | J |
+| 019 | `browser_action_log` | K |
+
+---
+
 ## Ordre d'implémentation recommandé
 
 ```
 ✅ Phase 2 — v10 Evolution (implémentée)
 ✅ Sous-projet A — Scheduler/Briefing (implémenté, mergé)
-📋 Sous-projet B — Email/Calendrier
-📋 Sous-projet C — RSS/News
-💡 Admin UI v2 (onglets manquants)
-💡 Sous-projets D/E/F (features avancées)
+📋 Sous-projet B — Email/Calendrier       [priorité haute]
+📋 Sous-projet C — RSS/News               [priorité haute]
+🔧 Admin UI v2 (4 onglets manquants)      [priorité haute]
+📋 Sous-projet D — Recherche Web          [priorité haute]
+📋 Sous-projet E — Ingestion Docs         [priorité haute]
+📋 Sous-projet F — Backup & Restore       [priorité haute]
+📋 Sous-projet G — Interface Vocale       [priorité moyenne]
+📋 Sous-projet H — Memory Decay           [priorité moyenne]
+📋 Sous-projet I — PWA Mobile             [priorité moyenne]
+📋 Sous-projet J — Intégrations Dev       [priorité moyenne]
+📋 Sous-projet K — Browser Automation     [priorité basse]
+📋 Sous-projet L — Chiffrement At-Rest    [priorité basse]
 ```
