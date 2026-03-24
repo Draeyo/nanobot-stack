@@ -149,15 +149,7 @@ def get_feed_articles(feed_id: str, limit: int = 20, offset: int = 0) -> list[di
     feed = ingestor.get_feed(feed_id)
     if not feed:
         raise HTTPException(status_code=404, detail="Feed not found")
-    db = ingestor._connect()
-    try:
-        rows = db.execute(
-            "SELECT * FROM rss_entries WHERE feed_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?",
-            (feed_id, limit, offset),
-        ).fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        db.close()
+    return ingestor.get_entries(feed_id, limit=limit, offset=offset)
 
 
 @router.post("/sync")

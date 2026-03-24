@@ -26,7 +26,7 @@ from typing import Any
 import httpx
 
 try:
-    import boto3 as boto3  # optional S3 dependency
+    import boto3  # optional S3 dependency
 except ImportError:  # pragma: no cover
     boto3 = None  # type: ignore[assignment]
 

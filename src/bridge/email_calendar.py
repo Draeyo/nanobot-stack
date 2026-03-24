@@ -29,7 +29,7 @@ class EmailCalendarFetcher:
     Credentials are read from environment variables and never stored anywhere.
     """
 
-    def __init__(self, settings: dict | None = None) -> None:
+    def __init__(self) -> None:
         self._enabled = os.getenv("EMAIL_CALENDAR_ENABLED", "false").lower() == "true"
 
         # IMAP config
@@ -84,13 +84,13 @@ class EmailCalendarFetcher:
 
         try:
             emails = await self.fetch_recent_emails(since_hours=24)
-        except Exception as exc:
+        except Exception:
             logger.exception("IMAP fetch failed during sync")
             email_status = "error"
 
         try:
             events = await self.fetch_today_agenda()
-        except Exception as exc:
+        except Exception:
             logger.exception("Calendar fetch failed during sync")
             cal_status = "error"
 

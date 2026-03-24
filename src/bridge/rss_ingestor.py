@@ -49,6 +49,18 @@ class RssIngestor:
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
 
+    def get_entries(self, feed_id: str, limit: int = 20, offset: int = 0) -> list[dict]:
+        """Return stored entries for a feed."""
+        db = self._connect()
+        try:
+            rows = db.execute(
+                "SELECT * FROM rss_entries WHERE feed_id=? ORDER BY synced_at DESC LIMIT ? OFFSET ?",
+                (feed_id, limit, offset),
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            db.close()
+
     # ------------------------------------------------------------------
     # Feed CRUD
     # ------------------------------------------------------------------
