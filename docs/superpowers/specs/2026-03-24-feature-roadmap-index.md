@@ -165,40 +165,40 @@ Plan : [`../plans/2026-03-23-scheduler-briefing.md`](../plans/2026-03-23-schedul
 | Startup cleanup | `scheduler.py` | ✅ | Reset jobs bloqués à "running" |
 | Migration | `migrations/011_scheduler.py` | ✅ | Tables `scheduled_jobs` + `job_runs` |
 
-### Sous-projet B — Intégration Email/Calendrier 📋
+### Sous-projet B — Intégration Email/Calendrier ✅
 
 Spec : [`2026-03-24-sub-project-b-email-calendar.md`](2026-03-24-sub-project-b-email-calendar.md)
+Plan : [`../plans/2026-03-24-sub-project-b-email-calendar.md`](../plans/2026-03-24-sub-project-b-email-calendar.md)
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| IMAP email fetch | `email_calendar.py` | 📋 | Emails non-lus via imaplib/TLS |
-| CalDAV/ICS sync | `email_calendar.py` | 📋 | Événements du jour via caldav ou .ics |
-| Collection Qdrant | `email_inbox`, `calendar_events` | 📋 | TTL 7j / 30j |
-| Section `agenda` | `scheduler_executor.py` | 📋 | Événements calendrier dans briefing |
-| Section `email_digest` | `scheduler_executor.py` | 📋 | Résumé emails importants dans briefing |
-| API sync | `scheduler_api.py` ou nouveau | 📋 | Déclenchement sync manuelle |
-| Migration | `migrations/012_email_calendar.py` | 📋 | Table `email_sync_log` |
+| IMAP email fetch | `email_calendar.py` | ✅ | Emails non-lus via imaplib/TLS |
+| CalDAV/ICS sync | `email_calendar.py` | ✅ | Événements du jour via caldav ou .ics |
+| Collection Qdrant | `email_inbox`, `calendar_events` | ✅ | TTL 7j / 30j |
+| Section `agenda` | `scheduler_executor.py` | ✅ | Événements calendrier dans briefing |
+| Section `email_digest` | `scheduler_executor.py` | ✅ | Résumé emails importants dans briefing |
+| API sync | `email_calendar_api.py` | ✅ | GET /status + POST /sync |
+| Migration | `migrations/012_email_calendar.py` | ✅ | Table `email_sync_log` |
 
-**Dépendances Python :** `caldav>=1.3`, `icalendar>=5.0`
+**Dépendances Python :** `caldav>=1.3`, `icalendar>=5.0` — **Tests : 18/18 ✅**
 
-### Sous-projet C — Ingestion RSS/News 📋
+### Sous-projet C — Ingestion RSS/News ✅
 
 Spec : [`2026-03-24-sub-project-c-rss-ingestion.md`](2026-03-24-sub-project-c-rss-ingestion.md)
+Plan : [`../plans/2026-03-24-sub-project-c-rss-ingestion.md`](../plans/2026-03-24-sub-project-c-rss-ingestion.md)
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| Feed manager | `rss_ingestor.py` | 📋 | CRUD abonnements RSS (SQLite) |
-| Pipeline ingestion | `rss_ingestor.py` | 📋 | fetch → parse → embed → Qdrant |
-| Résumé LLM | `rss_ingestor.py` | 📋 | Un résumé par article (modèle cheap) |
-| Collection Qdrant | `rss_articles` | 📋 | Titre, URL, résumé, catégorie, date |
-| Section `rss_digest` | `scheduler_executor.py` | 📋 | Digest RSS dans briefing |
-| Remplacement `topics` | `scheduler_executor.py` | 📋 | Source → `rss_articles` au lieu de `documents` |
-| API REST | `rss_api.py` | 📋 | `/api/rss/feeds` CRUD + sync manuelle |
-| Admin UI onglet | `admin_ui.py` | 📋 | 12ème onglet — liste feeds, statut sync |
-| Sync schedulée | `scheduler_registry.py` | 📋 | Job système `*/30 * * * *` |
-| Migration | `migrations/013_rss.py` | 📋 | Tables `rss_feeds`, `rss_entries` |
+| Feed manager | `rss_ingestor.py` | ✅ | CRUD abonnements RSS (SQLite) |
+| Pipeline ingestion | `rss_ingestor.py` | ✅ | fetch → parse → embed → Qdrant |
+| Résumé LLM | `rss_ingestor.py` | ✅ | Un résumé par article (modèle cheap) |
+| Collection Qdrant | `rss_articles` | ✅ | Titre, URL, résumé, catégorie, date |
+| Section `rss_digest` | `scheduler_executor.py` | ✅ | Digest RSS dans briefing |
+| Job système RSS | `scheduler_registry.py` | ✅ | Job système `*/30 * * * *` |
+| API REST | `rss_api.py` | ✅ | `/api/rss/feeds` CRUD + sync manuelle |
+| Migration | `migrations/013_rss.py` | ✅ | Tables `rss_feeds`, `rss_entries` |
 
-**Dépendances Python :** `feedparser>=6.0`
+**Dépendances Python :** `feedparser>=6.0` — **Tests : 19/19 ✅**
 
 ---
 
@@ -245,21 +245,22 @@ Spec : [`2026-03-24-sub-project-e-local-docs.md`](2026-03-24-sub-project-e-local
 
 **Dépendances Python :** `pypdf>=3.0`, `python-docx>=1.0`, `watchdog>=3.0`
 
-### 4.4 Sous-projet F — Backup & Restore Automatique 📋
+### 4.4 Sous-projet F — Backup & Restore Automatique ✅
 
 Spec : [`2026-03-24-sub-project-f-backup-restore.md`](2026-03-24-sub-project-f-backup-restore.md)
+Plan : [`../plans/2026-03-24-sub-project-f-backup-restore.md`](../plans/2026-03-24-sub-project-f-backup-restore.md)
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| BackupManager | `backup_manager.py` | 📋 | Snapshots Qdrant + SQLite, archive .tar.gz |
-| Chiffrement archives | `backup_manager.py` | 📋 | AES-256 Fernet optionnel |
-| Stockage S3 | `backup_manager.py` | 📋 | Backblaze B2 / AWS S3 / MinIO via boto3 |
-| Job cron | `scheduler_registry.py` | 📋 | Backup quotidien à 3h par défaut |
-| Script restore | `scripts/restore.sh` | 📋 | Restore manuel avec prompts de sécurité |
-| Table SQLite | `backup_log` | 📋 | Migration 015 |
-| API REST | `backup_api.py` | 📋 | Trigger, list, status, delete |
+| BackupManager | `backup_manager.py` | ✅ | Snapshots Qdrant + SQLite, archive .tar.gz |
+| Chiffrement archives | `backup_manager.py` | ✅ | AES-256 Fernet optionnel |
+| Stockage S3 | `backup_manager.py` | ✅ | Backblaze B2 / AWS S3 / MinIO via boto3 |
+| Job cron | `scheduler_registry.py` | ✅ | Backup quotidien à 3h par défaut |
+| Scripts | `scripts/backup.sh`, `scripts/restore.sh` | ✅ | Backup standalone + restore interactif |
+| Table SQLite | `backup_log` | ✅ | Migration 015 |
+| API REST | `backup_api.py` | ✅ | Trigger, list, status, delete |
 
-**Dépendances Python :** `cryptography>=42.0`, `boto3>=1.34` (optionnel si S3)
+**Dépendances Python :** `cryptography>=42.0`, `boto3>=1.34` (optionnel) — **Tests : 11/11 ✅**
 
 ### 4.5 Sous-projet G — Interface Vocale (STT/TTS) 📋
 
@@ -469,12 +470,12 @@ Spec : [`2026-03-24-sub-project-l-encryption-at-rest.md`](2026-03-24-sub-project
 ```
 ✅ Phase 2 — v10 Evolution (implémentée)
 ✅ Sous-projet A — Scheduler/Briefing (implémenté, mergé)
-📋 Sous-projet B — Email/Calendrier       [priorité haute]
-📋 Sous-projet C — RSS/News               [priorité haute]
+✅ Sous-projet B — Email/Calendrier       [implémenté — 18 tests]
+✅ Sous-projet C — RSS/News               [implémenté — 19 tests]
 🔧 Admin UI v2 (4 onglets manquants)      [priorité haute]
 📋 Sous-projet D — Recherche Web          [priorité haute]
 📋 Sous-projet E — Ingestion Docs         [priorité haute]
-📋 Sous-projet F — Backup & Restore       [priorité haute]
+✅ Sous-projet F — Backup & Restore       [implémenté — 11 tests]
 📋 Sous-projet G — Interface Vocale       [priorité moyenne]
 📋 Sous-projet H — Memory Decay           [priorité moyenne]
 📋 Sous-projet I — PWA Mobile             [priorité moyenne]

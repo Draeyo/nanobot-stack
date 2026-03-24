@@ -1437,3 +1437,40 @@ try:
         logger.info("Agent orchestrator disabled (AGENT_ORCHESTRATOR_ENABLED=false)")
 except Exception as exc:
     logger.info("v10 agent orchestrator not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Sub-project B: Email / Calendar
+# ---------------------------------------------------------------------------
+try:
+    from email_calendar_api import router as email_calendar_router, init_email_calendar_api
+    init_email_calendar_api(qdrant_client=qdrant, verify_token_dep=verify_token)
+    app.include_router(email_calendar_router, dependencies=[Depends(verify_token)])
+    logger.info("Email/Calendar endpoints mounted (/api/email-calendar/*)")
+except Exception as exc:
+    logger.info("Email/Calendar API not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Sub-project C: RSS Ingestion
+# ---------------------------------------------------------------------------
+try:
+    from rss_ingestor import RssIngestor
+    from rss_api import router as rss_router, init_rss_api
+    _rss_ingestor = RssIngestor(state_dir=STATE_DIR, qdrant_client=qdrant)
+    init_rss_api(ingestor=_rss_ingestor)
+    app.include_router(rss_router, dependencies=[Depends(verify_token)])
+    logger.info("RSS endpoints mounted (/api/rss/*)")
+except Exception as exc:
+    logger.info("RSS API not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Sub-project F: Backup & Restore
+# ---------------------------------------------------------------------------
+try:
+    from backup_manager import BackupManager
+    from backup_api import router as backup_router, init_backup_api
+    _backup_manager = BackupManager(state_dir=STATE_DIR, qdrant_url=QDRANT_URL)
+    init_backup_api(manager=_backup_manager)
+    app.include_router(backup_router, dependencies=[Depends(verify_token)])
+    logger.info("Backup endpoints mounted (/api/backup/*)")
+except Exception as exc:
+    logger.info("Backup API not loaded: %s", exc)

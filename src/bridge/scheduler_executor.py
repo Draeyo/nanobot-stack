@@ -20,6 +20,10 @@ SECTION_LABELS = {
     "reminders": "Rappels",
     "weekly_summary": "Bilan de la semaine",
     "custom": "Note personnalisée",
+    "agenda": "Agenda du jour",
+    "email_digest": "Résumé emails",
+    "rss_digest": "Actualités RSS",
+    "rss_sync": "Synchronisation RSS",
 }
 
 
@@ -61,6 +65,40 @@ class JobExecutor:
                 except Exception:
                     pass
             return 1
+        return 24
+
+    def _email_window_hours(self, cron: str, last_run: str | None) -> int:
+        """Return time window in hours for email_digest queries.
+
+        If cron is sub-daily, use elapsed time since last_sync from email_sync_log
+        (falling back to 24h if no record). If cron is daily or slower, use 24h.
+        """
+        interval_minutes = self._cron_interval_minutes(cron)
+        if interval_minutes < 24 * 60:
+            # Try to read last_synced from email_sync_log
+            try:
+                db = sqlite3.connect(self._db_path)
+                try:
+                    row = db.execute(
+                        "SELECT last_synced FROM email_sync_log WHERE account='imap'"
+                    ).fetchone()
+                finally:
+                    db.close()
+                if row and row[0]:
+                    lr = datetime.fromisoformat(row[0])
+                    delta = (datetime.now(timezone.utc) - lr).total_seconds() / 3600
+                    return max(1, int(delta) + 1)
+            except Exception:
+                pass
+            # Fallback: use last_run from scheduler
+            if last_run:
+                try:
+                    lr = datetime.fromisoformat(last_run)
+                    delta = (datetime.now(timezone.utc) - lr).total_seconds() / 3600
+                    return max(1, int(delta) + 1)
+                except Exception:
+                    pass
+            return 24
         return 24
 
     def _is_high_frequency(self, cron: str) -> bool:
@@ -168,11 +206,114 @@ class JobExecutor:
         except Exception as e:
             return f"topics error: {e}"
 
+    async def _collect_agenda(self) -> str:
+        """Fetch today's calendar events via EmailCalendarFetcher."""
+        try:
+            from email_calendar import EmailCalendarFetcher  # type: ignore[import]
+            fetcher = EmailCalendarFetcher()
+            events = await fetcher.fetch_today_agenda()
+            return EmailCalendarFetcher.format_agenda(events)
+        except Exception as e:
+            logger.exception("agenda section error")
+            return f"agenda error: {e}"
+
+    async def _run_rss_sync(self) -> str:
+        """Trigger sync_all_feeds for the system RSS Sync job. Returns a status string."""
+        rss_enabled = os.getenv("RSS_ENABLED", "false").lower() in ("1", "true", "yes")
+        if not rss_enabled:
+            return ""
+        try:
+            from rss_ingestor import RssIngestor  # type: ignore[import]
+            state_dir = os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state")
+            ingestor = RssIngestor(state_dir=state_dir, qdrant_client=self._qdrant)
+            result = await ingestor.sync_all_feeds()
+            return (
+                f"RSS sync completed: {result.get('feeds_synced', 0)} feeds, "
+                f"{result.get('new_articles', 0)} new articles"
+            )
+        except Exception as e:
+            logger.exception("rss_sync job error")
+            return f"rss_sync error: {e}"
+
+    async def _collect_rss_digest(self, since_hours: int = 24) -> str:
+        """Collect recent RSS articles grouped by category as markdown digest."""
+        rss_enabled = os.getenv("RSS_ENABLED", "false").lower() in ("1", "true", "yes")
+        if not rss_enabled:
+            return ""
+        if not self._qdrant:
+            return ""
+        try:
+            from rss_ingestor import RssIngestor  # type: ignore[import]
+            state_dir = os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state")
+            ingestor = RssIngestor(state_dir=state_dir, qdrant_client=self._qdrant)
+            return await ingestor.collect_digest(since_hours=since_hours)
+        except Exception as e:
+            logger.exception("rss_digest section error")
+            return f"rss_digest error: {e}"
+
+    async def _collect_email_digest(self, since_hours: int = 24) -> str:
+        """Fetch recent important emails and summarise with LLM."""
+        try:
+            from email_calendar import EmailCalendarFetcher  # type: ignore[import]
+            fetcher = EmailCalendarFetcher()
+            emails = await fetcher.fetch_recent_emails(since_hours=since_hours)
+            if not emails:
+                return "Aucun email important dans la période."
+
+            # Build a concise listing for the LLM summariser
+            email_lines = []
+            for em in emails:
+                tags_str = ", ".join(em.get("tags", []))
+                email_lines.append(
+                    f"De: {em.get('sender', '')}\n"
+                    f"Sujet: {em.get('subject', '')}\n"
+                    f"Tags: {tags_str}\n"
+                    f"Extrait: {em.get('snippet', '')[:200]}"
+                )
+            email_block = "\n\n---\n\n".join(email_lines)
+
+            # LLM summarisation with a cheap model (best-effort)
+            try:
+                import litellm  # type: ignore[import]
+                messages = [
+                    {
+                        "role": "system",
+                        "content": (
+                            "Tu es un assistant personnel. Résume les emails importants "
+                            "ci-dessous en 3-5 bullet points concis en français."
+                        ),
+                    },
+                    {
+                        "role": "user",
+                        "content": f"Emails importants:\n\n{email_block}",
+                    },
+                ]
+                resp = await litellm.acompletion(
+                    model="gpt-4o-mini", messages=messages, max_tokens=400
+                )
+                return resp.choices[0].message.content or email_block
+            except Exception:
+                logger.warning("LLM summarisation failed for email_digest, returning raw listing")
+                return email_block
+
+        except Exception as e:
+            logger.exception("email_digest section error")
+            return f"email_digest error: {e}"
+
     async def collect_sections(self, sections: list[str], cron: str,
                                 last_run: str | None, prompt: str, job_name: str) -> str:
         """Collect all enabled sections in parallel and assemble the prompt."""
+        # Validate email_digest frequency before proceeding
+        if "email_digest" in sections:
+            if self._cron_interval_minutes(cron) < 2 * 60:
+                raise ValueError(
+                    "Section 'email_digest' cannot be used with cron intervals < 2h "
+                    "(LLM cost risk — each run triggers an extra LLM call)"
+                )
+
         tasks: dict[str, Any] = {}
         window_h = self._notes_window_hours(cron, last_run)
+        email_window_h = self._email_window_hours(cron, last_run)
 
         for sec in sections:
             if sec == "system_health":
@@ -188,6 +329,14 @@ class JobExecutor:
                     logger.warning("Section 'topics' skipped for high-frequency job (cron=%s)", cron)
                 else:
                     tasks[sec] = self._collect_topics()
+            elif sec == "agenda":
+                tasks[sec] = self._collect_agenda()
+            elif sec == "email_digest":
+                tasks[sec] = self._collect_email_digest(since_hours=email_window_h)
+            elif sec == "rss_digest":
+                tasks[sec] = self._collect_rss_digest(since_hours=email_window_h)
+            elif sec == "rss_sync":
+                tasks[sec] = self._run_rss_sync()
 
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         section_data = dict(zip(tasks.keys(), results))
