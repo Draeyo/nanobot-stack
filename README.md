@@ -13,6 +13,7 @@
   <a href="#authentik-setup">Authentik Setup</a> •
   <a href="#admin-ui">Admin UI</a> •
   <a href="#usage">Usage</a> •
+  <a href="#roadmap">Roadmap</a> •
   <a href="#faq">FAQ</a> •
   <a href="#contributing">Contributing</a>
 </p>
@@ -134,6 +135,26 @@ Internet
 - **Memory decay**: time and access-based scoring so recent/frequent memories rank higher
 - **Working memory**: per-session context tracking (query history, seen chunks, active topics)
 - **Context compression**: long conversations are summarized to fit within model context limits
+</details>
+
+<details>
+<summary><strong>Proactive assistant</strong> — It works even when you don't ask</summary>
+
+- **Morning briefing**: a scheduled digest delivered every morning — system health, personal reminders, email summary, RSS highlights, and upcoming calendar events
+- **Email/Calendar sync**: connects to any IMAP server (TLS) and CalDAV/ICS calendar; emails and events are embedded into Qdrant for context-aware retrieval
+- **RSS/News ingestion**: subscribe to any RSS feed; articles are fetched, summarised (cheap model), and embedded every 30 minutes; included in the morning briefing
+- **Cron scheduler**: APScheduler-backed job engine with a REST API and Admin UI tab — define custom jobs beyond the built-in ones
+- **Broadcast notifier**: fan-out delivery over ntfy, Telegram, Discord, and WhatsApp in a single call
+</details>
+
+<details>
+<summary><strong>Backup & restore</strong> — Your data is safe</summary>
+
+- **Automatic daily backups** at 3 AM: Qdrant snapshots + all SQLite databases packed into a `.tar.gz` archive
+- **AES-256 encryption**: optional Fernet encryption of backup archives before storage
+- **S3-compatible upload**: push to Backblaze B2, AWS S3, or MinIO via `boto3`
+- **REST API**: trigger, list, inspect, or delete backups at `/api/backup`
+- **Restore script**: interactive `scripts/restore.sh` that decrypts, unpacks, and restores from any archive
 </details>
 
 <details>
@@ -751,13 +772,37 @@ If Ollama is installed (`INSTALL_OLLAMA=true`), the circuit breakers will detect
 <details>
 <summary><strong>How do I back up my data?</strong></summary>
 
-The important data lives in:
+The built-in backup system handles everything automatically. A daily cron job at 3 AM creates an encrypted archive of all Qdrant snapshots and SQLite databases and (optionally) uploads it to S3-compatible storage.
+
+Trigger a manual backup via the API:
+
+```bash
+curl -X POST http://127.0.0.1:8089/api/backup/trigger \
+  -H "X-Bridge-Token: $TOKEN"
+```
+
+Or restore from an existing archive:
+
+```bash
+scripts/restore.sh /path/to/backup.tar.gz.enc
+```
+
+Configure backup in `/opt/nanobot-stack/rag-bridge/.env`:
+
+```bash
+BACKUP_ENCRYPT=true
+BACKUP_ENCRYPTION_KEY=<fernet-key>
+BACKUP_S3_BUCKET=my-bucket
+BACKUP_S3_ENDPOINT=https://s3.us-east-005.backblazeb2.com
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+```
+
+The important data (for manual backups) lives in:
 - `/var/lib/qdrant/` — Vector database (memory + documents)
 - `/opt/nanobot-stack/rag-bridge/state/` — Ingestion state + feedback + audit logs
 - `/opt/nanobot-stack/rag-docs/` — Source documents
 - `/opt/docker/langfuse/data/` — Langfuse traces
-
-A simple `rsync` or filesystem snapshot covers everything.
 </details>
 
 ## Troubleshooting
@@ -843,6 +888,22 @@ nanobot-stack/
 └── docs/
     └── REFERENCE.md              # Full API & endpoint reference
 ```
+
+## Roadmap
+
+Features currently in active development (full specs and implementation plans in [`docs/superpowers/`](docs/superpowers/)):
+
+| Feature | Description | Priority |
+|---------|-------------|----------|
+| **Admin UI v2** | Trust policies tab, cost dashboard with Chart.js projections, procedural workflows tab, agent status tab | High |
+| **Web Search (Sub-D)** | Self-hosted SearXNG integration — private, no tracking, embedded results cached in Qdrant with 6h TTL | High |
+| **Local Document Ingestion (Sub-E)** | Real-time watchdog on a folder — ingest PDF, Markdown, DOCX, TXT automatically as files arrive | High |
+| **Voice Interface (Sub-G)** | STT via faster-whisper, TTS via Piper — full voice round-trip in the Admin UI chat tab | Medium |
+| **Memory Decay & Feedback (Sub-H)** | Exponential decay scoring on memories, feedback-driven routing adjustments | Medium |
+| **PWA Mobile (Sub-I)** | Installable web app with offline support and Web Push notifications | Medium |
+| **Developer Integrations (Sub-J)** | GitHub PR/issue sync, Obsidian vault ingestion with WikiLink resolution | Medium |
+| **Browser Automation (Sub-K)** | Playwright-based BrowserAgent with trust-gated actions and domain allowlist | Low |
+| **Encryption At-Rest (Sub-L)** | AES-256-GCM field-level encryption for sensitive Qdrant payloads and SQLite columns | Low |
 
 ## Contributing
 
