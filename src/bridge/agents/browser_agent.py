@@ -178,7 +178,7 @@ class BrowserAgent(AgentBase):
         if hostname.startswith("www."):
             hostname = hostname[4:]
         for allowed in self.allowed_domains:
-            allowed_clean = allowed.lstrip("www.")
+            allowed_clean = allowed[4:] if allowed.startswith("www.") else allowed
             if hostname == allowed_clean or hostname.endswith("." + allowed_clean):
                 return True
         raise BrowserDomainBlockedError(f"Domain not in allowlist: {hostname!r} (url={url!r})")
