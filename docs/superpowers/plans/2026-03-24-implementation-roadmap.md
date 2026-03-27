@@ -181,193 +181,76 @@ gh pr create --title "feat: Admin UI v2 — automated tests for trust/cost/workf
 
 ---
 
-### Task 2: Sub-D — Web Search (SearXNG)
+### Task 2: Sub-D — Web Search (SearXNG) ✅ IMPLEMENTED
 
 **Plan:** `docs/superpowers/plans/2026-03-24-sub-project-d-web-search.md`
 **Migration:** 014
-**Shared files touched:** `app.py`, `scheduler_registry.py`, `scheduler_executor.py`, `agents/__init__.py`
+**Branch:** `feature/sub-d-web-search` — pushed, PR open
+**Tests:** 157 passing — pylint 10.00/10
 
-**Infra prerequisite:** SearXNG container must be defined in `docker-compose.yml` with `SEARXNG_URL` env var. The plan includes this — verify it is added.
+Notable implementation:
+- `WebSearchAgent` extends `AgentBase`, queries SearXNG, rate-limits by IP, caches results in `web_search_results` Qdrant collection (TTL 6h)
+- SearXNG service added to `docker-compose.yml` on private network
+- `web_digest` section added to `JobExecutor` guarded by `SEARXNG_ENABLED`
+- `SEARXNG_ENABLED=false` default — all paths guarded
 
-- [ ] **Step 1: Pull latest main**
-
-```bash
-git checkout main && git pull
-```
-
-- [ ] **Step 2: Create worktree**
-
-```bash
-git worktree add ../nanobot-sub-d -b feature/sub-d-web-search
-cd ../nanobot-sub-d
-```
-
-- [ ] **Step 3: Execute plan**
-
-Use `superpowers:subagent-driven-development` with plan `docs/superpowers/plans/2026-03-24-sub-project-d-web-search.md`.
-
-- [ ] **Step 4: Verify migration slot**
-
-```bash
-ls migrations/014_web_search.py  # must exist
-ls migrations/015_backup_log.py  # must still exist unchanged
-```
-
-- [ ] **Step 5: Run full test suite + pylint**
-
-```bash
-cd src/bridge && python -m pytest ../../tests/ -v
-pylint $(git ls-files '*.py') --fail-under=10
-```
-
+- [x] **Step 1–5: Implemented, spec-reviewed, quality-reviewed**
 - [ ] **Step 6: PR → merge → delete branch**
 
 ```bash
-git push -u origin feature/sub-d-web-search
-gh pr create --title "feat(sub-d): web search via SearXNG + WebSearchAgent"
+# PR open at https://github.com/Draeyo/nanobot-stack/compare/feature/sub-d-web-search
 ```
 
 ---
 
-### Task 3: Sub-E — Local Document Ingestion
+### Task 3: Sub-E — Local Document Ingestion ✅ IMPLEMENTED
 
 **Plan:** `docs/superpowers/plans/2026-03-24-sub-project-e-local-docs.md`
-**Migration:** 016 (after Task 0 patch)
-**Shared files touched:** `app.py`, `requirements.txt`
+**Migration:** 016
+**Branch:** `feature/sub-e-local-docs` — pushed, PR open
+**Tests:** 125 passing — pylint 10.00/10
 
-- [ ] **Step 1: Pull latest main (after Sub-D merged)**
+Notable implementation:
+- `LocalDocIngestor`: TXT/MD/PDF/DOCX extraction, semantic chunking, PII filter, Qdrant upsert with dedup by file hash
+- `LocalDocWatcher`: watchdog-based directory monitor with clean shutdown
+- UUID-based Qdrant point IDs (not hash) to avoid ID collisions across file updates
+- `LOCAL_DOCS_ENABLED=false` default; watcher only started when enabled
 
-```bash
-git checkout main && git pull
-```
-
-- [ ] **Step 2: Create worktree**
-
-```bash
-git worktree add ../nanobot-sub-e -b feature/sub-e-local-docs
-cd ../nanobot-sub-e
-```
-
-- [ ] **Step 3: Verify migration number in plan is 016**
-
-```bash
-grep "VERSION" docs/superpowers/plans/2026-03-24-sub-project-e-local-docs.md | head -3
-# Expected: VERSION = 16
-```
-
-- [ ] **Step 4: Execute plan**
-
-Use `superpowers:subagent-driven-development` with plan `docs/superpowers/plans/2026-03-24-sub-project-e-local-docs.md`.
-
-- [ ] **Step 5: Run full test suite + pylint**
-
-```bash
-cd src/bridge && python -m pytest ../../tests/ -v
-pylint $(git ls-files '*.py') --fail-under=10
-```
-
+- [x] **Step 1–5: Implemented, spec-reviewed, quality-reviewed**
 - [ ] **Step 6: PR → merge → delete branch**
 
 ```bash
-git push -u origin feature/sub-e-local-docs
-gh pr create --title "feat(sub-e): local document ingestion (PDF/MD/TXT/DOCX + watchdog)"
+# PR open at https://github.com/Draeyo/nanobot-stack/compare/feature/sub-e-local-docs
 ```
 
 ---
 
-### Task 4: Sub-G — Voice Interface
+### Task 4: Sub-G — Voice Interface ✅ MERGED ON MAIN
 
 **Plan:** `docs/superpowers/plans/2026-03-24-sub-project-g-voice-interface.md`
-**Migration:** 017 (after Task 0 patch)
-**Shared files touched:** `app.py`, `requirements.txt`, `docker-compose.yml`
+**Migration:** 017
+**Commit on main:** `1b0f79d feat(voice): implement Sub-G — Voice Interface (STT/TTS)`
+**Tests:** 126 passing — pylint 10.00/10
 
-**Infra prerequisite:** faster-whisper and Piper TTS containers added to `docker-compose.yml`. The plan includes this.
-
-- [ ] **Step 1: Pull latest main**
-
-```bash
-git checkout main && git pull
-```
-
-- [ ] **Step 2: Create worktree**
-
-```bash
-git worktree add ../nanobot-sub-g -b feature/sub-g-voice
-cd ../nanobot-sub-g
-```
-
-- [ ] **Step 3: Verify migration number in plan is 017**
-
-```bash
-grep "VERSION" docs/superpowers/plans/2026-03-24-sub-project-g-voice-interface.md | head -3
-# Expected: VERSION = 17
-```
-
-- [ ] **Step 4: Execute plan**
-
-Use `superpowers:subagent-driven-development` with plan `docs/superpowers/plans/2026-03-24-sub-project-g-voice-interface.md`.
-
-- [ ] **Step 5: Run full test suite + pylint**
-
-```bash
-cd src/bridge && python -m pytest ../../tests/ -v
-pylint $(git ls-files '*.py') --fail-under=10
-```
-
-- [ ] **Step 6: PR → merge → delete branch**
-
-```bash
-git push -u origin feature/sub-g-voice
-gh pr create --title "feat(sub-g): voice interface — faster-whisper STT + Piper TTS"
-```
+- [x] **Fully implemented and merged to `main`**
 
 ---
 
-### Task 5: Sub-H — Memory Decay & Feedback Loop
+### Task 5: Sub-H — Memory Decay & Feedback Loop ✅ MERGED ON MAIN
 
 **Plan:** `docs/superpowers/plans/2026-03-24-sub-project-h-memory-decay.md`
-**Migration:** 018 (after Task 0 patch)
-**Shared files touched:** `scheduler_registry.py`, `scheduler_executor.py`
+**Migration:** 018
+**Commits on main:** `5b9c95e` through `8c43c5b` (6 commits)
+**Tests:** 186 passing — pylint 10.00/10
 
-**Soft prerequisite:** Sub-B (Email/Calendar) and Sub-C (RSS) should be running in production so memory collections contain real data. This sub-project will still work without them but decay will have nothing to act on yet.
+Notable implementation:
+- `MemoryDecayManager`: exponential decay scoring (`score_point`), `run_decay_scan`, `confirm_access`, `forget`
+- `FeedbackLearner`: `record_feedback`, `analyze_recent_feedback`, `apply_adjustments`
+- `adaptive_router.py` applies `routing_adjustments` multiplier in `get_model_ranking()`
+- Weekly `Memory Decay Scan` job registered when `MEMORY_DECAY_ENABLED=true`
+- `/memory/decay`, `/memory/feedback`, `/memory/forget` endpoints
 
-- [ ] **Step 1: Pull latest main**
-
-```bash
-git checkout main && git pull
-```
-
-- [ ] **Step 2: Create worktree**
-
-```bash
-git worktree add ../nanobot-sub-h -b feature/sub-h-memory-decay
-cd ../nanobot-sub-h
-```
-
-- [ ] **Step 3: Verify migration number in plan is 018**
-
-```bash
-grep "VERSION" docs/superpowers/plans/2026-03-24-sub-project-h-memory-decay.md | head -3
-# Expected: VERSION = 18
-```
-
-- [ ] **Step 4: Execute plan**
-
-Use `superpowers:subagent-driven-development` with plan `docs/superpowers/plans/2026-03-24-sub-project-h-memory-decay.md`.
-
-- [ ] **Step 5: Run full test suite + pylint**
-
-```bash
-cd src/bridge && python -m pytest ../../tests/ -v
-pylint $(git ls-files '*.py') --fail-under=10
-```
-
-- [ ] **Step 6: PR → merge → delete branch**
-
-```bash
-git push -u origin feature/sub-h-memory-decay
-gh pr create --title "feat(sub-h): memory decay scoring + feedback learning loop"
-```
+- [x] **Fully implemented and merged to `main`**
 
 ---
 

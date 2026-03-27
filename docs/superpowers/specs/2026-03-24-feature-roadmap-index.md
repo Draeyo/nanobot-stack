@@ -217,31 +217,32 @@ Les onglets suivants sont spécifiés dans le v10 evolution design mais pas enco
 | Procedural Workflows | Liste workflows appris, confiance, toggles replay | 🔧 |
 | Agent Status | Agents disponibles, exécutions récentes, coût par agent | 🔧 |
 
-### 4.2 Sous-projet D — Recherche Web (SearXNG) 📋
+### 4.2 Sous-projet D — Recherche Web (SearXNG) ✅
 
 Spec : [`2026-03-24-sub-project-d-web-search.md`](2026-03-24-sub-project-d-web-search.md)
+Branche : `feature/sub-d-web-search` — PR ouverte — **157 tests ✅ pylint 10.00/10**
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| WebSearchAgent | `agents/web_search_agent.py` | 📋 | Agent étendant AgentBase, interroge SearXNG |
-| SearXNG Docker | `docker-compose.yml` | 📋 | Service SearXNG sur réseau privé |
-| Tool `web_search` | `src/mcp/` | 📋 | Outil MCP pour OrchestratorAgent |
-| Collection Qdrant | `web_search_results` | 📋 | Résultats cachés, TTL 6h |
-| Section briefing | `scheduler_executor.py` | 📋 | Section `web_digest` — top résultats sur topics configurés |
-| Table SQLite | `web_search_log` | 📋 | Historique requêtes, rate limiting |
-| API REST | `web_search_api.py` | 📋 | `POST /tools/web-search` |
+| WebSearchAgent | `agents/web_search_agent.py` | ✅ | Agent étendant AgentBase, interroge SearXNG, rate-limit par IP |
+| SearXNG Docker | `docker-compose.yml` | ✅ | Service SearXNG sur réseau privé |
+| Collection Qdrant | `web_search_results` | ✅ | Résultats cachés, TTL 6h |
+| Section briefing | `scheduler_executor.py` | ✅ | Section `web_digest` — top résultats sur topics configurés, guard `SEARXNG_ENABLED` |
+| Table SQLite | `web_search_log` | ✅ | Migration 014 — historique requêtes, rate-limit indexes |
+| API REST | `web_search_api.py` | ✅ | `POST /tools/web-search`, stats, status |
 
-### 4.3 Sous-projet E — Ingestion Documents Locaux 📋
+### 4.3 Sous-projet E — Ingestion Documents Locaux ✅
 
 Spec : [`2026-03-24-sub-project-e-local-docs.md`](2026-03-24-sub-project-e-local-docs.md)
+Branche : `feature/sub-e-local-docs` — PR ouverte — **125 tests ✅ pylint 10.00/10**
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| LocalDocIngestor | `local_doc_ingestor.py` | 📋 | Ingestion PDF, MD, TXT, DOCX |
-| LocalDocWatcher | `local_doc_ingestor.py` | 📋 | Surveillance dossier en temps réel (watchdog) |
-| Extension `docs_reference` | Qdrant | 📋 | Nouveaux champs payload : source_path, file_hash, chunk_index |
-| Table SQLite | `docs_ingestion_log` | 📋 | Migration 014 |
-| API REST | `local_docs_api.py` | 📋 | CRUD + status + upload manuel |
+| LocalDocIngestor | `local_doc_ingestor.py` | ✅ | Ingestion PDF, MD, TXT, DOCX — chunking sémantique, filtre PII, dedup par hash |
+| LocalDocWatcher | `local_doc_ingestor.py` | ✅ | Surveillance dossier en temps réel (watchdog) avec shutdown propre |
+| Collection Qdrant | `docs_reference` | ✅ | UUID point IDs, `source_path`, `file_hash`, `chunk_index` |
+| Table SQLite | `docs_ingestion_log` | ✅ | Migration 016 — status/type/hash indexes |
+| API REST | `local_docs_api.py` | ✅ | CRUD + status + upload manuel |
 
 **Dépendances Python :** `pypdf>=3.0`, `python-docx>=1.0`, `watchdog>=3.0`
 
@@ -262,35 +263,38 @@ Plan : [`../plans/2026-03-24-sub-project-f-backup-restore.md`](../plans/2026-03-
 
 **Dépendances Python :** `cryptography>=42.0`, `boto3>=1.34` (optionnel) — **Tests : 11/11 ✅**
 
-### 4.5 Sous-projet G — Interface Vocale (STT/TTS) 📋
+### 4.5 Sous-projet G — Interface Vocale (STT/TTS) ✅
 
 Spec : [`2026-03-24-sub-project-g-voice-interface.md`](2026-03-24-sub-project-g-voice-interface.md)
+Commit sur main : `1b0f79d` — **126 tests ✅ pylint 10.00/10**
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| VoiceProcessor | `voice_processor.py` | 📋 | Pipeline STT (faster-whisper) + TTS (Piper) |
-| Docker Piper | `docker-compose.yml` | 📋 | Service `piper` sur réseau privé |
-| Endpoint transcription | `voice_api.py` | 📋 | `POST /api/voice/transcribe` — audio → texte |
-| Endpoint synthèse | `voice_api.py` | 📋 | `POST /api/voice/synthesize` — texte → audio MP3 |
-| Endpoint chat vocal | `voice_api.py` | 📋 | `POST /api/voice/chat` — round-trip complet |
-| Interface Admin UI | `admin_ui.py` | 📋 | Bouton micro dans l'onglet Chat |
-| Table SQLite | `voice_sessions` | 📋 | Métriques sessions, pas d'audio stocké |
+| VoiceProcessor | `voice_processor.py` | ✅ | Pipeline STT (faster-whisper) + TTS (Piper) |
+| Docker Piper | `docker-compose.yml` | ✅ | Service `piper` sur réseau privé |
+| Endpoint transcription | `voice_api.py` | ✅ | `POST /api/voice/transcribe` — audio → texte |
+| Endpoint synthèse | `voice_api.py` | ✅ | `POST /api/voice/synthesize` — texte → audio MP3 |
+| Endpoint chat vocal | `voice_api.py` | ✅ | `POST /api/voice/chat` — round-trip complet |
+| Interface Admin UI | `admin_ui.py` | ✅ | Bouton micro dans l'onglet Chat |
+| Table SQLite | `voice_sessions` | ✅ | Métriques sessions, migration 017, pas d'audio stocké |
 
 **Dépendances Python :** `faster-whisper>=1.0`
 
-### 4.6 Sous-projet H — Memory Decay & Boucle de Feedback 📋
+### 4.6 Sous-projet H — Memory Decay & Boucle de Feedback ✅
 
 Spec : [`2026-03-24-sub-project-h-memory-decay.md`](2026-03-24-sub-project-h-memory-decay.md)
+Commits sur main : `5b9c95e` → `8c43c5b` — **186 tests ✅ pylint 10.00/10**
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| MemoryDecayManager | `memory_decay.py` | 📋 | Dégradation exponentielle + seuil suppression |
-| FeedbackLearner | `feedback_learner.py` | 📋 | Ajustement routing depuis feedbacks utilisateur |
-| Job cron hebdo | `scheduler_registry.py` | 📋 | Scan decay toutes les collections permanentes |
-| Extension table `feedback` | `rag.db` | 📋 | Ajout colonnes query_type, model_used, correction_text |
-| Table `routing_adjustments` | SQLite | 📋 | Scores d'ajustement par type/modèle |
-| Table `memory_decay_log` | SQLite | 📋 | Audit suppressions (migration 016) |
-| API REST | `memory_api.py` | 📋 | Decay stats, feedback, forget, routing adjustments |
+| MemoryDecayManager | `memory_decay.py` | ✅ | Dégradation exponentielle, `score_point`, `run_decay_scan`, `confirm_access`, `forget` |
+| FeedbackLearner | `feedback_learner.py` | ✅ | `record_feedback`, `analyze_recent_feedback`, `apply_adjustments` |
+| Intégration router | `adaptive_router.py` | ✅ | Multiplicateur `routing_adjustments` dans `get_model_ranking()` |
+| Job cron hebdo | `scheduler_registry.py` | ✅ | Scan decay toutes les collections permanentes, guard `MEMORY_DECAY_ENABLED` |
+| Extension table `feedback` | `rag.db` | ✅ | Colonnes `query_type`, `model_used`, `correction_text` |
+| Table `routing_adjustments` | SQLite | ✅ | Scores d'ajustement par type/modèle, migration 018 |
+| Table `memory_decay_log` | SQLite | ✅ | Audit suppressions |
+| API REST | `memory_api.py` | ✅ | `/memory/decay`, `/memory/feedback`, `/memory/forget`, routing adjustments |
 
 ### 4.7 Sous-projet I — Progressive Web App Mobile ✅
 
@@ -454,17 +458,19 @@ Branche : `feature/sub-l-encryption-at-rest` — PR ouverte — **396 tests ✅ 
 
 ## Numérotation des migrations SQLite
 
-| Migration | Table(s) | Sous-projet |
-|-----------|----------|-------------|
-| 011 | `scheduled_jobs`, `job_runs` | A |
-| 012 | `email_sync_log` | B |
-| 013 | `rss_feeds`, `rss_entries` | C |
-| 014 | `docs_ingestion_log` | E |
-| 015 | `backup_log` | F |
-| 016 | `memory_decay_log`, `routing_adjustments` | H |
-| 017 | `push_subscriptions` | I |
-| 018 | `github_sync_log`, `obsidian_index` | J |
-| 019 | `browser_action_log` | K |
+| Migration | Table(s) | Sous-projet | Statut |
+|-----------|----------|-------------|--------|
+| 011 | `scheduled_jobs`, `job_runs` | A | ✅ main |
+| 012 | `email_sync_log` | B | ✅ main |
+| 013 | `rss_feeds`, `rss_entries` | C | ✅ main |
+| 014 | `web_search_log` | D | 🔧 PR |
+| 015 | `backup_log` | F | ✅ main |
+| 016 | `docs_ingestion_log` | E | 🔧 PR |
+| 017 | `voice_sessions` | G | ✅ main |
+| 018 | `memory_decay_log`, `routing_adjustments` | H | ✅ main |
+| 019 | `push_subscriptions` | I | 🔧 PR |
+| 020 | `github_sync_log`, `obsidian_index` | J | 🔧 PR |
+| 021 | `browser_action_log` | K | 🔧 PR |
 
 ---
 
@@ -475,12 +481,12 @@ Branche : `feature/sub-l-encryption-at-rest` — PR ouverte — **396 tests ✅ 
 ✅ Sous-projet A — Scheduler/Briefing (implémenté, mergé)
 ✅ Sous-projet B — Email/Calendrier       [implémenté — 18 tests]
 ✅ Sous-projet C — RSS/News               [implémenté — 19 tests]
-🔧 Admin UI v2 (4 onglets manquants)      [priorité haute]
-📋 Sous-projet D — Recherche Web          [priorité haute — branche: feature/sub-d-web-search]
-📋 Sous-projet E — Ingestion Docs         [priorité haute — branche: feature/sub-e-local-docs]
+🔧 Admin UI v2 (4 onglets manquants)      [priorité haute — branche: feature/admin-ui-v2]
+🔧 Sous-projet D — Recherche Web          [implémenté — 157 tests — PR ouverte: feature/sub-d-web-search]
+🔧 Sous-projet E — Ingestion Docs         [implémenté — 125 tests — PR ouverte: feature/sub-e-local-docs]
 ✅ Sous-projet F — Backup & Restore       [implémenté — 11 tests]
-✅ Sous-projet G — Interface Vocale       [implémenté — mergé sur main]
-✅ Sous-projet H — Memory Decay           [implémenté — mergé sur main]
+✅ Sous-projet G — Interface Vocale       [implémenté — 126 tests — mergé sur main]
+✅ Sous-projet H — Memory Decay           [implémenté — 186 tests — mergé sur main]
 🔧 Sous-projet I — PWA Mobile             [implémenté — PR ouverte: feature/sub-i-pwa]
 🔧 Sous-projet J — Intégrations Dev       [implémenté — PR ouverte: feature/sub-j-dev-integrations]
 🔧 Sous-projet K — Browser Automation     [implémenté — 357 tests — PR ouverte: feature/sub-k-browser-automation]

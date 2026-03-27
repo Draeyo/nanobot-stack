@@ -909,6 +909,8 @@ Full specs and implementation plans in [`docs/superpowers/`](docs/superpowers/).
 
 | Feature | Branch | Description |
 |---------|--------|-------------|
+| **Web Search (Sub-D)** | `feature/sub-d-web-search` | Self-hosted SearXNG integration — private search, results cached in Qdrant 6h TTL, `web_digest` in morning briefing |
+| **Local Document Ingestion (Sub-E)** | `feature/sub-e-local-docs` | Watchdog-monitored folder — PDF, Markdown, DOCX, TXT ingested automatically; dedup by file hash |
 | **PWA Mobile (Sub-I)** | `feature/sub-i-pwa` | Installable web app — Web Push notifications, offline fallback, responsive mobile chat UI |
 | **Developer Integrations (Sub-J)** | `feature/sub-j-dev-integrations` | GitHub PR/issue/commit sync, Obsidian vault ingestion with WikiLink resolution, daily dev digest in briefing |
 | **Browser Automation (Sub-K)** | `feature/sub-k-browser-automation` | Playwright BrowserAgent — headless Chromium, trust-gated fill/submit, domain allowlist, ephemeral sessions |
@@ -919,8 +921,6 @@ Full specs and implementation plans in [`docs/superpowers/`](docs/superpowers/).
 | Feature | Description | Priority |
 |---------|-------------|----------|
 | **Admin UI v2** | Trust policies tab, cost dashboard with Chart.js projections, procedural workflows tab, agent status tab | High |
-| **Web Search (Sub-D)** | Self-hosted SearXNG integration — private, no tracking, embedded results cached in Qdrant with 6h TTL | High |
-| **Local Document Ingestion (Sub-E)** | Real-time watchdog on a folder — ingest PDF, Markdown, DOCX, TXT automatically as files arrive | High |
 
 ## Contributing
 
