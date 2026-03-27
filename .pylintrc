@@ -33,6 +33,17 @@ disable=
     R1702,  # too-many-nested-blocks
     W0122,  # exec-used (sandboxed code interpreter)
     W1309,  # f-string-without-interpolation
+    W0212,  # protected-access (tests legitimately access private members)
+    W0611,  # unused-import (common in test mock setups)
+    W0613,  # unused-argument (mock callback signatures)
+    W0612,  # unused-variable (common in test context managers)
+    W0621,  # redefined-outer-name (nested mock/fixture pattern)
+    W0404,  # reimported (conditional import pattern in tests)
+    W0622,  # redefined-builtin (mocking builtins in tests)
+    C0411,  # wrong-import-order (conditional imports in test files)
+    C0413,  # wrong-import-position (conditional imports in test files)
+    C1803,  # use-implicit-booleaness-not-comparison (explicit == [] is clearer in tests)
+    W0719,  # broad-exception-raised (tests raise Exception intentionally)
 
 [DESIGN]
 max-args=10

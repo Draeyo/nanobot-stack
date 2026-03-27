@@ -24,6 +24,8 @@ SECTION_LABELS = {
     "email_digest": "Résumé emails",
     "rss_digest": "Actualités RSS",
     "rss_sync": "Synchronisation RSS",
+    "web_digest": "Veille Web",
+    "dev_digest": "Activité développeur",
 }
 
 
@@ -235,6 +237,80 @@ class JobExecutor:
             logger.exception("rss_sync job error")
             return f"rss_sync error: {e}"
 
+    async def _collect_dev_digest(self) -> str:
+        """Collect recent GitHub activity from Qdrant memory_projects collection."""
+        github_enabled = os.getenv("GITHUB_ENABLED", "false").lower() in ("1", "true", "yes")
+        if not github_enabled:
+            return ""
+        if self._qdrant is None:
+            return ""
+        try:
+            results = self._qdrant.scroll(
+                collection_name="memory_projects",
+                scroll_filter={
+                    "must": [
+                        {"key": "source", "match": {"value": "github"}},
+                        {"key": "state", "match": {"any": ["open", "merged"]}},
+                    ]
+                },
+                limit=30,
+            )
+            points = results[0] if results else []
+
+            prs = [p for p in points if p.payload.get("type") == "pr"]
+            issues = [p for p in points if p.payload.get("type") == "issue"]
+            commits = [p for p in points if p.payload.get("type") == "commit"]
+
+            if not prs and not issues and not commits:
+                return ""
+
+            lines = ["## Activité GitHub\n"]
+            if prs:
+                lines.append("### Pull Requests ouvertes")
+                for p in prs:
+                    lines.append(
+                        f"- [{p.payload.get('title', '')}]({p.payload.get('url', '')}) "
+                        f"({p.payload.get('repo', '')})"
+                    )
+                lines.append("")
+            if issues:
+                lines.append("### Issues ouvertes")
+                for p in issues:
+                    lines.append(
+                        f"- [{p.payload.get('title', '')}]({p.payload.get('url', '')}) "
+                        f"({p.payload.get('repo', '')})"
+                    )
+                lines.append("")
+            if commits:
+                lines.append("### Commits récents")
+                for p in commits:
+                    lines.append(
+                        f"- [{p.payload.get('title', '')}]({p.payload.get('url', '')}) "
+                        f"({p.payload.get('repo', '')})"
+                    )
+                lines.append("")
+
+            return "\n".join(lines)
+        except Exception as exc:
+            return f"dev_digest error: {exc}"
+
+    async def _run_github_sync(self) -> str:
+        """Trigger GitHub sync via DevIntegrationManager."""
+        github_enabled = os.getenv("GITHUB_ENABLED", "false").lower() in ("1", "true", "yes")
+        if not github_enabled:
+            return ""
+        try:
+            from dev_integrations import DevIntegrationManager  # pylint: disable=import-outside-toplevel
+            state_dir = os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state")
+            import pathlib as _pathlib  # pylint: disable=import-outside-toplevel
+            db_path = _pathlib.Path(state_dir) / "scheduler.db"
+            manager = DevIntegrationManager(db_path=db_path, qdrant_client=self._qdrant)
+            result = await manager.sync_github()
+            return f"GitHub sync: {result.get('items_synced', 0)} items"
+        except Exception as exc:
+            logger.exception("github_sync job error")
+            return f"github_sync error: {exc}"
+
     async def _collect_rss_digest(self, since_hours: int = 24) -> str:
         """Collect recent RSS articles grouped by category as markdown digest."""
         rss_enabled = os.getenv("RSS_ENABLED", "false").lower() in ("1", "true", "yes")
@@ -250,6 +326,29 @@ class JobExecutor:
         except Exception as e:
             logger.exception("rss_digest section error")
             return f"rss_digest error: {e}"
+
+    async def _collect_web_digest(self) -> str:
+        """Collect web search digest for configured WEB_DIGEST_TOPICS."""
+        searxng_enabled = os.getenv("SEARXNG_ENABLED", "false").lower() in ("1", "true", "yes")
+        if not searxng_enabled:
+            return ""
+        try:
+            from web_search_agent import WebSearchAgent  # type: ignore[import]
+            topics_raw = os.getenv("WEB_DIGEST_TOPICS", "")
+            topics = [t.strip() for t in topics_raw.split(",") if t.strip()]
+            if not topics:
+                return ""
+            state_dir = os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state")
+            db_path = str(__import__("pathlib").Path(state_dir) / "scheduler.db")
+            agent = WebSearchAgent(
+                run_chat_fn=lambda *a, **kw: {"text": ""},
+                db_path=db_path,
+                qdrant_client=self._qdrant,
+            )
+            return await agent.collect_web_digest(topics=topics)
+        except Exception as e:
+            logger.exception("web_digest section error")
+            return f"web_digest error: {e}"
 
     async def _collect_email_digest(self, since_hours: int = 24) -> str:
         """Fetch recent important emails and summarise with LLM."""
@@ -337,6 +436,12 @@ class JobExecutor:
                 tasks[sec] = self._collect_rss_digest(since_hours=email_window_h)
             elif sec == "rss_sync":
                 tasks[sec] = self._run_rss_sync()
+            elif sec == "web_digest":
+                tasks[sec] = self._collect_web_digest()
+            elif sec == "dev_digest":
+                tasks[sec] = self._collect_dev_digest()
+            elif sec == "github_sync":
+                tasks[sec] = self._run_github_sync()
 
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         section_data = dict(zip(tasks.keys(), results))

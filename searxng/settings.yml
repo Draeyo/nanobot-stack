@@ -1,0 +1,43 @@
+server:
+  secret_key: "${SEARXNG_SECRET_KEY}"
+  bind_address: "0.0.0.0:8080"
+  public_instance: false
+  image_proxy: false
+
+search:
+  safe_search: 1
+  default_lang: "fr-FR"
+  formats:
+    - html
+    - json
+
+general:
+  debug: false
+  instance_name: "nanobot-searxng"
+
+ui:
+  static_use_hash: true
+  default_theme: simple
+
+enabled_plugins:
+  - Hash_plugin
+  - Search_on_category_select
+
+engines:
+  - name: google
+    engine: google
+    shortcut: g
+    disabled: false
+  - name: bing
+    engine: bing
+    shortcut: b
+    disabled: false
+  - name: duckduckgo
+    engine: duckduckgo
+    shortcut: ddg
+    disabled: false
+  - name: wikipedia
+    engine: wikipedia
+    shortcut: wp
+    language: fr
+    disabled: false

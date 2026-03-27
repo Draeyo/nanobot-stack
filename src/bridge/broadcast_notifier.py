@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger("rag-bridge.broadcast_notifier")
 
-VALID_CHANNELS = frozenset({"ntfy", "telegram", "discord", "whatsapp"})
+VALID_CHANNELS = frozenset({"ntfy", "telegram", "discord", "whatsapp", "webpush"})
 
 
 class BroadcastNotifier:
@@ -15,10 +16,13 @@ class BroadcastNotifier:
 
     Args:
         channel_manager: The ChannelManager instance from channels/__init__.py.
+        push_manager: Optional PushNotificationManager singleton. When provided,
+            webpush delivery reuses it instead of creating a new instance.
     """
 
-    def __init__(self, channel_manager: Any) -> None:
+    def __init__(self, channel_manager: Any, push_manager: Any = None) -> None:
         self._channel_manager = channel_manager
+        self._push_manager = push_manager
 
     async def broadcast(self, channels: list[str], message: str) -> dict[str, bool]:
         """Send message to each channel. Returns {channel: success}."""
@@ -34,6 +38,8 @@ class BroadcastNotifier:
     async def _deliver(self, channel: str, message: str) -> bool:
         if channel == "ntfy":
             return await self._deliver_ntfy(message)
+        if channel == "webpush":
+            return await self._deliver_webpush(message)
         return await self._deliver_adapter(channel, message)
 
     async def _deliver_ntfy(self, message: str) -> bool:
@@ -43,6 +49,21 @@ class BroadcastNotifier:
             return bool(result.get("ok"))
         except Exception:
             logger.exception("ntfy delivery failed")
+            return False
+
+    async def _deliver_webpush(self, message: str) -> bool:
+        push_enabled = os.getenv("PUSH_ENABLED", "false").lower() == "true"
+        if not push_enabled:
+            logger.debug("webpush channel skipped: PUSH_ENABLED=false")
+            return False
+        try:
+            if self._push_manager is None:
+                from push_notifications import PushNotificationManager  # pylint: disable=import-outside-toplevel
+                self._push_manager = PushNotificationManager()
+            result = self._push_manager.send_to_all(title="Nanobot", body=message, url="/")
+            return result.get("sent", 0) > 0 or result.get("failed", 0) == 0
+        except Exception:
+            logger.exception("webpush delivery failed")
             return False
 
     async def _deliver_adapter(self, platform: str, message: str) -> bool:

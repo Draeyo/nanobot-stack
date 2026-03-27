@@ -1,0 +1,3 @@
+Contact: jean.dupont@example.com
+Phone: +33 6 12 34 56 78
+Regular content here.

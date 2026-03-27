@@ -1,4 +1,5 @@
 """Tests for VoiceProcessor — skeleton, guards, env vars."""
+# pylint: disable=no-member  # wave.open mode overloads not resolved by pylint
 import os
 import sys
 import pytest
