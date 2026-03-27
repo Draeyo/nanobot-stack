@@ -1,4 +1,5 @@
 """Tests for GitHubSyncer — GitHub synchronisation component."""
+# pylint: disable=no-member  # MagicMock.return_value not recognized by pylint
 from __future__ import annotations
 import os
 import pytest

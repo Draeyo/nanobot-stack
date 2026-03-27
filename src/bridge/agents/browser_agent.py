@@ -454,7 +454,7 @@ class BrowserAgent(AgentBase):
         steps = self._parse_steps(task, context)
 
         try:
-            async with asyncio.timeout(self.max_session_s):
+            async with asyncio.timeout(self.max_session_s):  # pylint: disable=no-member
                 result = await self._run_session(steps, task)
         except TimeoutError:
             return self._make_result("failed", f"Session timed out after {self.max_session_s}s")

@@ -619,11 +619,11 @@ class LocalDocWatcher:
         watcher_ref = self
 
         class _Handler(FileSystemEventHandler):
-            def on_created(handler_self, event):  # pylint: disable=no-self-argument
+            def on_created(self, event):
                 """Handle file creation events."""
                 watcher_ref._handle_event(event, ingestor)  # pylint: disable=protected-access
 
-            def on_modified(handler_self, event):  # pylint: disable=no-self-argument
+            def on_modified(self, event):
                 """Handle file modification events."""
                 watcher_ref._handle_event(event, ingestor)  # pylint: disable=protected-access
 

@@ -1,4 +1,5 @@
 """Tests for voice_api.py REST endpoints."""
+# pylint: disable=no-member  # wave.open mode overloads not resolved by pylint
 import io
 import sys
 import struct
