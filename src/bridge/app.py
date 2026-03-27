@@ -1474,3 +1474,31 @@ try:
     logger.info("Backup endpoints mounted (/api/backup/*)")
 except Exception as exc:
     logger.info("Backup API not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Sub-project G: Voice Interface (STT/TTS)
+# ---------------------------------------------------------------------------
+try:
+    from voice_processor import VoiceProcessor
+    from voice_api import router as voice_router, init_voice_api
+
+    _voice_processor = VoiceProcessor()
+
+    # Wire the existing chat handler so voice_chat can call the full pipeline.
+    async def _voice_handle_chat(message: str, session_id: str, source: str) -> str:
+        result = run_chat_task(
+            task_type="fallback_general",
+            messages=[{"role": "user", "content": message}],
+        )
+        return result.get("text", str(result))
+
+    _voice_processor.set_dependencies({
+        "handle_chat": _voice_handle_chat,
+        "state_dir": str(STATE_DIR),
+    })
+
+    init_voice_api(processor=_voice_processor, verify_token_dep=verify_token)
+    app.include_router(voice_router, dependencies=[Depends(verify_token)])
+    logger.info("Voice endpoints mounted (/api/voice/*)")
+except Exception as exc:
+    logger.info("Voice API not loaded: %s", exc)

@@ -515,6 +515,190 @@ SECTION_CHAT = """
       </div>
     </div>
   </div>
+
+  <!-- Voice Interface block — shown only if voice is enabled -->
+  <div x-data="voiceUI()" x-show="voiceEnabled" x-cloak class="mt-6 border-t pt-4">
+    <h3 class="font-semibold text-gray-700 mb-3">Interface Vocale</h3>
+
+    <!-- Record button -->
+    <div class="flex items-center gap-3 mb-3">
+      <button
+        @click="toggleRecording()"
+        :class="recording ? 'bg-red-500 hover:bg-red-600' : 'bg-blue-500 hover:bg-blue-600'"
+        class="text-white font-semibold px-4 py-2 rounded transition"
+      >
+        <span x-text="recording ? 'Arreter' : 'Parler'"></span>
+      </button>
+      <div x-show="recording" class="text-sm text-red-500 animate-pulse">Enregistrement...</div>
+      <div x-show="processing" class="text-sm text-blue-500 animate-pulse">Traitement...</div>
+    </div>
+
+    <!-- Audio level visualizer -->
+    <div x-show="recording" class="mb-3 h-4 bg-gray-200 rounded overflow-hidden">
+      <div class="h-full bg-green-400 transition-all duration-100"
+           :style="`width: ${audioLevel}%`"></div>
+    </div>
+
+    <!-- Transcription preview -->
+    <div x-show="transcription" class="mb-3">
+      <div class="text-sm text-gray-500 mb-1">Transcription :</div>
+      <div class="bg-gray-50 border rounded px-3 py-2 text-sm" x-text="transcription"></div>
+    </div>
+
+    <!-- Audio player for response -->
+    <div x-show="audioUrl" class="mb-3">
+      <audio :src="audioUrl" controls autoplay class="w-full"></audio>
+      <div x-show="responseText" class="mt-2 text-sm text-gray-600" x-text="responseText"></div>
+    </div>
+
+    <!-- Voice settings (collapsible) -->
+    <details class="text-sm mt-3">
+      <summary class="cursor-pointer text-gray-500 hover:text-gray-700">Parametres voix</summary>
+      <div class="mt-2 grid grid-cols-2 gap-2">
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Voix TTS</label>
+          <select x-model="selectedVoice" class="border rounded px-2 py-1 text-sm w-full">
+            <option value="fr_siwis">fr_siwis (naturelle)</option>
+            <option value="fr_siwis_low">fr_siwis_low (rapide)</option>
+            <option value="fr_upmc_pierre">fr_upmc_pierre</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs text-gray-500 mb-1">Langue STT</label>
+          <select x-model="sttLanguage" class="border rounded px-2 py-1 text-sm w-full">
+            <option value="fr">Francais</option>
+            <option value="en">English</option>
+            <option value="">Auto-detection</option>
+          </select>
+        </div>
+      </div>
+      <button @click="testVoice()" class="mt-2 text-blue-500 hover:underline text-xs">
+        Tester la voix
+      </button>
+    </details>
+
+    <!-- Disabled notice (shown when voice feature is off) -->
+    <div x-show="!voiceEnabled" class="text-sm text-gray-400 italic">
+      Interface vocale desactivee — definir <code>VOICE_ENABLED=true</code>
+      et redemarrer les services Docker (<code>piper</code>).
+    </div>
+  </div>
+
+  <script>
+  function voiceUI() {
+    return {
+      voiceEnabled: false,
+      recording: false,
+      processing: false,
+      audioLevel: 0,
+      transcription: '',
+      responseText: '',
+      audioUrl: null,
+      selectedVoice: 'fr_siwis',
+      sttLanguage: 'fr',
+      _mediaRecorder: null,
+      _chunks: [],
+      _analyser: null,
+      _animFrame: null,
+
+      async init() {
+        try {
+          const r = await fetch('/api/voice/status');
+          const d = await r.json();
+          this.voiceEnabled = d.enabled;
+        } catch(e) { /* voice not available */ }
+      },
+
+      async toggleRecording() {
+        if (this.recording) {
+          this._stopRecording();
+        } else {
+          await this._startRecording();
+        }
+      },
+
+      async _startRecording() {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+          ? 'audio/webm;codecs=opus' : 'audio/mp4';
+        this._mediaRecorder = new MediaRecorder(stream, { mimeType });
+        this._chunks = [];
+        this._mediaRecorder.ondataavailable = e => this._chunks.push(e.data);
+        this._mediaRecorder.onstop = () => this._sendAudio(mimeType);
+
+        const ctx = new AudioContext();
+        const src = ctx.createMediaStreamSource(stream);
+        this._analyser = ctx.createAnalyser();
+        src.connect(this._analyser);
+        this._animateLevel();
+
+        this._mediaRecorder.start();
+        this.recording = true;
+        this.transcription = '';
+        this.audioUrl = null;
+        this.responseText = '';
+      },
+
+      _stopRecording() {
+        this._mediaRecorder && this._mediaRecorder.stop();
+        this.recording = false;
+        cancelAnimationFrame(this._animFrame);
+        this.audioLevel = 0;
+      },
+
+      _animateLevel() {
+        if (!this._analyser) return;
+        const data = new Uint8Array(this._analyser.frequencyBinCount);
+        const tick = () => {
+          this._analyser.getByteFrequencyData(data);
+          const avg = data.reduce((s, v) => s + v, 0) / data.length;
+          this.audioLevel = Math.min(100, avg * 1.5);
+          this._animFrame = requestAnimationFrame(tick);
+        };
+        tick();
+      },
+
+      async _sendAudio(mimeType) {
+        this.processing = true;
+        try {
+          const ext = mimeType.startsWith('audio/webm') ? 'webm' : 'mp4';
+          const blob = new Blob(this._chunks, { type: mimeType });
+          const form = new FormData();
+          form.append('file', blob, `recording.${ext}`);
+          form.append('session_id', '');
+
+          const r = await fetch('/api/voice/chat', { method: 'POST', body: form });
+          if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
+          this.transcription = r.headers.get('x-transcription') || '';
+          this.responseText = r.headers.get('x-response-text') || '';
+
+          const audioBuf = await r.arrayBuffer();
+          const audioBlob = new Blob([audioBuf], { type: 'audio/mpeg' });
+          this.audioUrl = URL.createObjectURL(audioBlob);
+        } catch (e) {
+          this.transcription = `Erreur : ${e.message}`;
+        } finally {
+          this.processing = false;
+        }
+      },
+
+      async testVoice() {
+        const r = await fetch('/api/voice/synthesize', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: 'Bonjour, le systeme vocal est operationnel.', voice: this.selectedVoice }),
+        });
+        if (r.ok) {
+          const buf = await r.arrayBuffer();
+          const blob = new Blob([buf], { type: 'audio/mpeg' });
+          new Audio(URL.createObjectURL(blob)).play();
+        }
+      },
+    };
+  }
+  </script>
+
 </section>
 """
 

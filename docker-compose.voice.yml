@@ -1,0 +1,54 @@
+# docker-compose.voice.yml — Sub-project G: Voice Interface overlay
+# Usage: docker compose -f docker-compose.yml -f docker-compose.voice.yml up
+# Or set COMPOSE_PROFILES=voice in .env when using the main compose file.
+
+services:
+  # Sub-project G: Piper TTS (required for voice endpoints)
+  piper:
+    image: rhasspy/wyoming-piper:latest
+    restart: unless-stopped
+    volumes:
+      - piper_voices:/data
+    environment:
+      - PIPER_VOICE=fr_FR-siwis-medium
+    ports:
+      - "5002:5002"
+    networks:
+      - nanobot_internal
+    profiles:
+      - voice
+
+  # Sub-project G: Whisper STT server (optional — only if STT_BACKEND=whisper_server)
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest-cpu
+    restart: unless-stopped
+    environment:
+      - ASR_MODEL=base
+      - ASR_ENGINE=faster_whisper
+    ports:
+      - "9000:9000"
+    networks:
+      - nanobot_internal
+    profiles:
+      - voice
+      - whisper_server
+
+  # Bridge service voice env vars (merge with existing bridge service)
+  bridge:
+    environment:
+      - VOICE_ENABLED=${VOICE_ENABLED:-false}
+      - STT_BACKEND=${STT_BACKEND:-faster_whisper}
+      - STT_MODEL=${STT_MODEL:-whisper-base}
+      - STT_LANGUAGE=${STT_LANGUAGE:-fr}
+      - PIPER_URL=${PIPER_URL:-http://piper:5002}
+      - WHISPER_URL=${WHISPER_URL:-http://whisper:9000}
+      - TTS_MODEL=${TTS_MODEL:-fr_siwis}
+      - VOICE_MAX_AUDIO_DURATION_S=${VOICE_MAX_AUDIO_DURATION_S:-60}
+      - VOICE_MAX_TTS_CHARS=${VOICE_MAX_TTS_CHARS:-2000}
+
+volumes:
+  piper_voices:
+
+networks:
+  nanobot_internal:
+    external: true
