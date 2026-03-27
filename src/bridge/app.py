@@ -168,6 +168,7 @@ except Exception as exc:
     logger.warning("Audit log middleware not loaded: %s", exc)
 
 # Shutdown hook: persist token stats and stop file watcher
+_local_doc_watcher = None  # may be replaced in Sub-project E setup below
 @app.on_event("shutdown")
 def _shutdown():
     token_tracker.flush()
@@ -177,6 +178,9 @@ def _shutdown():
             watcher.stop()
     except Exception:
         pass
+    # Stop local doc watcher
+    if _local_doc_watcher is not None:
+        _local_doc_watcher.stop()
     logger.info("Token stats flushed, file watcher stopped")
 
 # v9 extension setup is deferred to after run_chat_task / verify_token are defined (see below)
@@ -1501,6 +1505,27 @@ try:
     logger.info("Web Search endpoints mounted (/tools/web-search)")
 except Exception as exc:
     logger.info("Web Search API not loaded: %s", exc)
+# Sub-project E: Local Document Ingestion
+# ---------------------------------------------------------------------------
+try:
+    from local_doc_ingestor import LocalDocIngestor, LocalDocWatcher
+    from local_docs_api import router as local_docs_router, init_local_docs_api
+
+    _local_doc_ingestor = LocalDocIngestor(state_dir=STATE_DIR, qdrant_client=qdrant)
+    init_local_docs_api(ingestor=_local_doc_ingestor)
+    app.include_router(local_docs_router, dependencies=[Depends(verify_token)])
+
+    _LOCAL_DOCS_ENABLED = os.getenv("LOCAL_DOCS_ENABLED", "false").lower() in ("1", "true", "yes")
+    _local_doc_watcher = None
+    if _LOCAL_DOCS_ENABLED:
+        _local_doc_watcher = LocalDocWatcher()
+        _watch_path = os.getenv("LOCAL_DOCS_WATCH_PATH", "/opt/nanobot-stack/watched-docs/")
+        _local_doc_watcher.start(path=_watch_path, ingestor=_local_doc_ingestor)
+        logger.info("LocalDocWatcher started on %s", _watch_path)
+
+    logger.info("Local Docs endpoints mounted (/api/docs/*)")
+except Exception as exc:
+    logger.info("Local Docs API not loaded: %s", exc)
 
 # ---------------------------------------------------------------------------
 # Sub-project F: Backup & Restore
