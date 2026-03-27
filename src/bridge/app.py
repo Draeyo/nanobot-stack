@@ -50,6 +50,7 @@ from broadcast_notifier import BroadcastNotifier
 from scheduler import SchedulerManager
 from scheduler_api import router as scheduler_router, init_scheduler_api
 from scheduler_registry import JobRegistry
+from memory_api import memory_router, feedback_router, init_memory_api
 
 load_dotenv()
 
@@ -1031,6 +1032,15 @@ def search(body: SearchIn):
         reranked = apply_decay_to_results(reranked, score_key="final_score")
     except Exception:
         pass
+    # Sub-projet H: reinforce memory for retrieved points
+    try:
+        from memory_decay import MemoryDecayManager, MEMORY_DECAY_ENABLED
+        if MEMORY_DECAY_ENABLED and reranked:
+            _decay_mgr = MemoryDecayManager(qdrant_client=qdrant)
+            for rp in reranked:
+                _decay_mgr.confirm_access(rp.get("collection", "memory_personal"), str(rp.get("id", "")))
+    except Exception as _decay_exc:
+        logger.debug("confirm_access failed (non-critical): %s", _decay_exc)
     return {"query": body.query, "results": reranked, "embedding_attempts": embedding_attempts, "collections": collections}
 
 @app.post("/remember", dependencies=[Depends(verify_token)])
@@ -1326,6 +1336,15 @@ scheduler_manager = SchedulerManager(
 )
 init_scheduler_api(manager=scheduler_manager, verify_token_dep=verify_token)
 app.include_router(scheduler_router)
+
+# Sub-projet H: memory decay + feedback loop
+try:
+    init_memory_api(qdrant_client=qdrant)
+    app.include_router(memory_router)
+    app.include_router(feedback_router)
+    logger.info("Memory decay + feedback loop endpoints mounted")
+except Exception as _mem_exc:
+    logger.info("Memory/feedback API not loaded: %s", _mem_exc)
 
 
 @app.on_event("startup")
