@@ -35,7 +35,7 @@
 
 ---
 
-## Task 1 — Migration `migrations/019_browser.py`
+## Task 1 — Migration `migrations/021_browser.py`
 
 **TDD approach:** write the test first, then the migration.
 
@@ -67,9 +67,9 @@ def state_dir(tmp_path, monkeypatch):
 
 def _load():
     # Force reimport so RAG_STATE_DIR monkeypatch is respected.
-    if "019_browser" in sys.modules:
-        del sys.modules["019_browser"]
-    return importlib.import_module("019_browser")
+    if "021_browser" in sys.modules:
+        del sys.modules["021_browser"]
+    return importlib.import_module("021_browser")
 
 
 def test_version(state_dir):
@@ -156,17 +156,17 @@ def test_insert_and_read(state_dir):
 
 ```bash
 cd /opt/nanobot-stack/rag-bridge && python -m pytest tests/test_migration_019.py -v
-# Expected: ModuleNotFoundError — 019_browser does not exist yet
+# Expected: ModuleNotFoundError — 021_browser does not exist yet
 ```
 
 - [ ] Confirm tests fail as expected (module not found).
 
 ### Step 3 — Create the migration
 
-Create `migrations/019_browser.py`:
+Create `migrations/021_browser.py`:
 
 ```python
-"""019_browser — browser_action_log table."""
+"""021_browser — browser_action_log table."""
 from __future__ import annotations
 
 import logging
@@ -174,7 +174,7 @@ import os
 import pathlib
 import sqlite3
 
-VERSION = 19
+VERSION = 21
 
 logger = logging.getLogger("migration.v19")
 STATE_DIR = pathlib.Path(os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state"))
@@ -233,7 +233,7 @@ def migrate(_ctx: dict) -> None:
         db.close()
 ```
 
-- [ ] Create `migrations/019_browser.py` with the content above.
+- [ ] Create `migrations/021_browser.py` with the content above.
 
 ### Step 4 — Run tests (expect all green)
 
@@ -247,7 +247,7 @@ cd /opt/nanobot-stack/rag-bridge && python -m pytest tests/test_migration_019.py
 ### Step 5 — Commit
 
 ```bash
-git add migrations/019_browser.py tests/test_migration_019.py
+git add migrations/021_browser.py tests/test_migration_019.py
 git commit -m "feat(migration): add 019 — browser_action_log table"
 ```
 
@@ -2392,10 +2392,10 @@ cd /opt/nanobot-stack/rag-bridge && python -m pytest --tb=short -q
 
 ```bash
 python migrations/run_migrations.py --dry-run
-# Expected includes: "Migration 19: 019_browser — would apply"
+# Expected includes: "Migration 19: 021_browser — would apply"
 ```
 
-- [ ] Migration dry-run shows 019_browser.
+- [ ] Migration dry-run shows 021_browser.
 
 ### Step 4 — Final commit
 
@@ -2460,7 +2460,7 @@ RUN pip install playwright>=1.44 && playwright install chromium --with-deps
 ## Checklist — All Deliverables
 
 ### Files to create
-- [ ] `migrations/019_browser.py` — VERSION=19, check(), migrate(), WAL mode, browser.db
+- [ ] `migrations/021_browser.py` — VERSION=19, check(), migrate(), WAL mode, browser.db
 - [ ] `src/bridge/agents/browser_agent.py` — BrowserAgent, result dataclasses, exceptions, seed_default_trust_policies()
 - [ ] `src/bridge/browser_api.py` — POST /api/browser/run, GET /api/browser/sessions, GET /api/browser/action-log
 - [ ] `tests/test_migration_019.py` — 7 migration tests

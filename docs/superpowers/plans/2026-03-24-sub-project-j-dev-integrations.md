@@ -12,7 +12,7 @@
 
 ## Migration number check
 
-Existing migrations in repo: 008, 010, 011, 012, 013, 014, 015. Slots 016–017 are reserved for other sub-projects (G, H, I). Per the spec, this sub-project uses **`migrations/016_github_obsidian.py`** (next available after 015). Note: the spec document names this file `018_github_sync_log.py` — if slots 016 and 017 are already claimed by sub-projects G and H at implementation time, use `018_github_sync_log.py` instead. Confirm with `ls migrations/` before creating.
+Existing migrations in repo: 008, 010, 011, 012, 013, 014, 015. Slots 016–017 are reserved for other sub-projects (G, H, I). Per the spec, this sub-project uses **`migrations/020_github_obsidian.py`** (next available after 015). Note: the spec document names this file `018_github_sync_log.py` — if slots 016 and 017 are already claimed by sub-projects G and H at implementation time, use `018_github_sync_log.py` instead. Confirm with `ls migrations/` before creating.
 
 > **New dependencies to add in `src/bridge/requirements.txt`:** `PyGithub>=2.0` and `PyYAML>=6.0` (PyYAML may already be present transitively — pin it explicitly).
 
@@ -26,7 +26,7 @@ Existing migrations in repo: 008, 010, 011, 012, 013, 014, 015. Slots 016–017 
 
 ### Test first
 
-**File:** `tests/test_migration_018_github_obsidian.py`
+**File:** `tests/test_migration_020_github_obsidian.py`
 
 ```python
 """Tests for migration 018 — github_sync_log and obsidian_index tables."""
@@ -45,7 +45,7 @@ def _load_migration(tmp_path):
     os.environ["RAG_STATE_DIR"] = str(tmp_path)
     spec = importlib.util.spec_from_file_location(
         "migration_018",
-        pathlib.Path(__file__).parent.parent / "migrations" / "018_github_obsidian.py",
+        pathlib.Path(__file__).parent.parent / "migrations" / "020_github_obsidian.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -163,8 +163,8 @@ def test_obsidian_index_indexes_exist(tmp_path, monkeypatch):
 
 ### Implementation
 
-- [ ] Create `migrations/018_github_obsidian.py` (adjust number if 016/017 are taken).
-- [ ] Set `VERSION = 18` (or the actual number used).
+- [ ] Create `migrations/020_github_obsidian.py` (adjust number if 016/017 are taken).
+- [ ] Set `VERSION = 20` (or the actual number used).
 - [ ] `check(_ctx)`: connect to `scheduler.db`, return `True` only if **both** `github_sync_log` and `obsidian_index` tables exist.
 - [ ] `migrate(_ctx)`: open `scheduler.db` with `PRAGMA journal_mode=WAL`, then:
   - `CREATE TABLE IF NOT EXISTS github_sync_log` with columns: `id TEXT PRIMARY KEY`, `synced_at TEXT NOT NULL`, `repos_synced TEXT NOT NULL`, `items_synced INTEGER NOT NULL DEFAULT 0`, `status TEXT NOT NULL`, `error_message TEXT`, `rate_limit_remaining INTEGER`, `rate_limit_reset TEXT`.
@@ -175,7 +175,7 @@ def test_obsidian_index_indexes_exist(tmp_path, monkeypatch):
   - `CREATE INDEX IF NOT EXISTS idx_obsidian_index_target_note_name ON obsidian_index(target_note_name)`.
   - `db.commit()`.
 - [ ] Log `"Migration 018: github_sync_log and obsidian_index tables created at %s"`.
-- [ ] Run tests: `pytest tests/test_migration_018_github_obsidian.py -v` — all green.
+- [ ] Run tests: `pytest tests/test_migration_020_github_obsidian.py -v` — all green.
 
 ---
 
@@ -1005,7 +1005,7 @@ class TestDevDigestSection:
 
 > **Already handled in Task 1.** Migration 018 creates both `github_sync_log` and `obsidian_index` in a single migration file. No additional migration needed.
 
-- [ ] Verify that `test_migration_018_github_obsidian.py::test_migrate_creates_obsidian_index` passes — confirming the table was created.
+- [ ] Verify that `test_migration_020_github_obsidian.py::test_migrate_creates_obsidian_index` passes — confirming the table was created.
 
 ---
 
@@ -1602,7 +1602,7 @@ class TestDevIntegrationsMountedInApp:
 - [ ] Run full GitHub syncer suite: `pytest tests/test_github_syncer.py -v` — all tests from Tasks 2–6 pass.
 - [ ] Run full Obsidian ingestor suite: `pytest tests/test_obsidian_ingestor.py -v` — all tests from Tasks 10–13 pass.
 - [ ] Run API tests: `pytest tests/test_dev_integrations_api.py -v` — all green.
-- [ ] Run migration tests: `pytest tests/test_migration_018_github_obsidian.py -v` — all green.
+- [ ] Run migration tests: `pytest tests/test_migration_020_github_obsidian.py -v` — all green.
 - [ ] Run full project test suite: `pytest tests/ -v` — no regressions in existing tests.
 
 ### Additional integration tests to add in `tests/test_github_syncer.py`
@@ -1720,7 +1720,7 @@ class TestGitHubSyncerRateLimit:
 
 | Task | File(s) | Type |
 |------|---------|------|
-| 1 | `migrations/018_github_obsidian.py` | New |
+| 1 | `migrations/020_github_obsidian.py` | New |
 | 2 | `src/bridge/dev_integrations.py` | New |
 | 3 | `src/bridge/dev_integrations.py` | Extend |
 | 4 | `src/bridge/dev_integrations.py` | Extend |
@@ -1738,7 +1738,7 @@ class TestGitHubSyncerRateLimit:
 | 16 | `tests/test_github_syncer.py`, `tests/test_obsidian_ingestor.py` | Test consolidation |
 
 **Test files produced:**
-- `tests/test_migration_018_github_obsidian.py`
+- `tests/test_migration_020_github_obsidian.py`
 - `tests/test_github_syncer.py`
 - `tests/test_obsidian_ingestor.py`
 - `tests/test_dev_integrations_api.py`
