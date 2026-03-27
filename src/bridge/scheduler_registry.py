@@ -70,6 +70,15 @@ _MEMORY_DECAY_JOB = {
     "timeout_s": 600,
 }
 
+_GITHUB_SYNC_JOB = {
+    "name": "GitHub Sync",
+    "cron": f"*/{max(5, min(1440, int(os.getenv('GITHUB_SYNC_INTERVAL', '30'))))} * * * *",
+    "sections": ["github_sync"],
+    "channels": [],
+    "prompt": "",
+    "timeout_s": 120,
+}
+
 
 class JobRegistry:
     def __init__(self, manager: Any) -> None:
@@ -91,6 +100,10 @@ class JobRegistry:
         if _env_bool("MEMORY_DECAY_ENABLED", False):
             jobs.append(_MEMORY_DECAY_JOB)
             logger.info("MEMORY_DECAY_ENABLED=true — registering Memory Decay Scan job")
+
+        if _env_bool("GITHUB_ENABLED", False):
+            jobs.append(_GITHUB_SYNC_JOB)
+            logger.info("GITHUB_ENABLED=true — registering GitHub Sync job")
 
         for job in jobs:
             self._mgr.create_job(
