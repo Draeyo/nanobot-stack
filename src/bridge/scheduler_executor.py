@@ -24,6 +24,7 @@ SECTION_LABELS = {
     "email_digest": "Résumé emails",
     "rss_digest": "Actualités RSS",
     "rss_sync": "Synchronisation RSS",
+    "web_digest": "Veille Web",
 }
 
 
@@ -251,6 +252,29 @@ class JobExecutor:
             logger.exception("rss_digest section error")
             return f"rss_digest error: {e}"
 
+    async def _collect_web_digest(self) -> str:
+        """Collect web search digest for configured WEB_DIGEST_TOPICS."""
+        searxng_enabled = os.getenv("SEARXNG_ENABLED", "false").lower() in ("1", "true", "yes")
+        if not searxng_enabled:
+            return ""
+        try:
+            from web_search_agent import WebSearchAgent  # type: ignore[import]
+            topics_raw = os.getenv("WEB_DIGEST_TOPICS", "")
+            topics = [t.strip() for t in topics_raw.split(",") if t.strip()]
+            if not topics:
+                return ""
+            state_dir = os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state")
+            db_path = str(__import__("pathlib").Path(state_dir) / "scheduler.db")
+            agent = WebSearchAgent(
+                run_chat_fn=lambda *a, **kw: {"text": ""},
+                db_path=db_path,
+                qdrant_client=self._qdrant,
+            )
+            return await agent.collect_web_digest(topics=topics)
+        except Exception as e:
+            logger.exception("web_digest section error")
+            return f"web_digest error: {e}"
+
     async def _collect_email_digest(self, since_hours: int = 24) -> str:
         """Fetch recent important emails and summarise with LLM."""
         try:
@@ -337,6 +361,8 @@ class JobExecutor:
                 tasks[sec] = self._collect_rss_digest(since_hours=email_window_h)
             elif sec == "rss_sync":
                 tasks[sec] = self._run_rss_sync()
+            elif sec == "web_digest":
+                tasks[sec] = self._collect_web_digest()
 
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
         section_data = dict(zip(tasks.keys(), results))
