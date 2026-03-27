@@ -10,9 +10,11 @@ import json
 import logging
 import os
 import sqlite3
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Any, Callable
 
 try:
@@ -83,9 +85,10 @@ class WebSearchAgent(AgentBase):
 
         state_dir = os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state")
         self._db_path: str = db_path or str(
-            __import__("pathlib").Path(state_dir) / "scheduler.db"
+            Path(state_dir) / "scheduler.db"
         )
         self._qdrant = qdrant_client
+        self._last_upsert_count: int = 0
 
     # ------------------------------------------------------------------
     # Public API
@@ -253,6 +256,7 @@ class WebSearchAgent(AgentBase):
             ]
 
             stored = await self._upsert_results(results)
+            self._last_upsert_count = stored
             duration_ms = int(
                 (datetime.now(timezone.utc) - t0).total_seconds() * 1000
             )
@@ -376,6 +380,7 @@ class WebSearchAgent(AgentBase):
                 "source": "web_search",
                 "fetched_at": r.fetched_at,
                 "created_at": now,
+                "expires_at": int(time.time()) + self.result_ttl_hours * 3600,
             }
 
             points.append(
@@ -409,9 +414,12 @@ class WebSearchAgent(AgentBase):
             )
             if not hits:
                 return ""
+            now_ts = int(time.time())
             lines = []
             for i, hit in enumerate(hits, start=1):
                 p = hit.payload
+                if p.get("expires_at") and p["expires_at"] < now_ts:
+                    continue
                 lines.append(
                     f"[{i}] {p.get('title', '')} ({p.get('url', '')})\n"
                     f"{p.get('snippet', '')}"

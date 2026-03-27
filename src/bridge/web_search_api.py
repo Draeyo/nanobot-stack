@@ -8,6 +8,7 @@ from typing import Any, List
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
+from web_search_agent import WebSearchRateLimitError, WebSearchUnavailableError
 
 logger = logging.getLogger("rag-bridge.web_search_api")
 
@@ -146,8 +147,6 @@ async def post_web_search(body: WebSearchRequest) -> dict:
                     "message": "Set SEARXNG_ENABLED=true to use web search."},
         )
 
-    from web_search_agent import WebSearchRateLimitError, WebSearchUnavailableError
-
     t0 = time.monotonic()
     try:
         results = await agent.search(
@@ -171,6 +170,7 @@ async def post_web_search(body: WebSearchRequest) -> dict:
 
     duration_ms = int((time.monotonic() - t0) * 1000)
     remaining = _rate_limit_remaining(_db_path, agent.rate_limit)
+    stored_in_qdrant = getattr(agent, "_last_upsert_count", len(results))
 
     return {
         "query": body.query,
@@ -186,7 +186,7 @@ async def post_web_search(body: WebSearchRequest) -> dict:
             for r in results
         ],
         "count": len(results),
-        "stored_in_qdrant": len(results),
+        "stored_in_qdrant": stored_in_qdrant,
         "duration_ms": duration_ms,
         "rate_limit_remaining": remaining,
     }

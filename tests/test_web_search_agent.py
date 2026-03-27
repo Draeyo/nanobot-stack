@@ -547,6 +547,13 @@ class TestUpsertResults:
         call_kwargs = agent._qdrant.upsert.call_args[1]
         points = call_kwargs["points"]
         assert len(points) == 1
+        payload = points[0].payload
+        assert "expires_at" in payload, "expires_at field must be present in Qdrant payload"
+        expected_ttl_seconds = 6 * 3600  # 21600
+        import time as _time
+        now_ts = int(_time.time())
+        assert payload["expires_at"] >= now_ts + expected_ttl_seconds - 5
+        assert payload["expires_at"] <= now_ts + expected_ttl_seconds + 5
 
 
 # ---------------------------------------------------------------------------
