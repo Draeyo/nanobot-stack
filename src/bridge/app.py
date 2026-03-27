@@ -1463,6 +1463,27 @@ except Exception as exc:
     logger.info("RSS API not loaded: %s", exc)
 
 # ---------------------------------------------------------------------------
+# Sub-project D: Web Search (SearXNG)
+# ---------------------------------------------------------------------------
+try:
+    from web_search_agent import WebSearchAgent
+    from web_search_api import router as web_search_router, init_web_search_api
+
+    _web_search_agent = WebSearchAgent(
+        run_chat_fn=run_chat_task,
+        db_path=str(STATE_DIR / "scheduler.db"),
+        qdrant_client=qdrant,
+    )
+    init_web_search_api(
+        agent=_web_search_agent,
+        db_path=str(STATE_DIR / "scheduler.db"),
+    )
+    app.include_router(web_search_router, dependencies=[Depends(verify_token)])
+    logger.info("Web Search endpoints mounted (/tools/web-search)")
+except Exception as exc:
+    logger.info("Web Search API not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
 # Sub-project F: Backup & Restore
 # ---------------------------------------------------------------------------
 try:
