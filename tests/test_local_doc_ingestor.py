@@ -402,6 +402,36 @@ def test_embed_and_upsert_calls_qdrant(ingestor, mock_qdrant):
     assert total_points == len(chunks)
 
 
+def test_embed_and_upsert_point_ids_are_uuids(ingestor, mock_qdrant):
+    """Point IDs passed to Qdrant must be valid UUIDs (not arbitrary strings)."""
+    chunks = ["chunk one content here", "chunk two content here"]
+    doc_id = str(uuid.uuid4())
+    metadata = {
+        "doc_id": doc_id,
+        "source_path": "/tmp/watched/doc.txt",
+        "file_type": "txt",
+        "file_hash": "abc123",
+        "title": "UUID Test Doc",
+        "tags": ["test"],
+        "ingested_at": "2026-03-24T00:00:00Z",
+    }
+    fake_vec = [0.0] * 1536
+
+    with patch("local_doc_ingestor.litellm") as mock_litellm:
+        mock_litellm.embedding.return_value = {"data": [{"embedding": fake_vec}]}
+        ingestor._embed_and_upsert(chunks, metadata)
+
+    all_points = []
+    for call in mock_qdrant.upsert.call_args_list:
+        all_points.extend(call.kwargs.get("points", []))
+
+    assert len(all_points) == len(chunks)
+    for pt in all_points:
+        # Qdrant requires UUID or integer IDs; assert the ID is a valid UUID string
+        parsed = uuid.UUID(pt.id)  # raises ValueError if not a valid UUID
+        assert str(parsed) == pt.id
+
+
 def test_embed_and_upsert_batch_limit(ingestor, mock_qdrant):
     """More than 100 chunks triggers multiple upsert calls (batch size=100)."""
     chunks = [f"chunk {i}" for i in range(150)]

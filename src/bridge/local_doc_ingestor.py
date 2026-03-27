@@ -320,7 +320,7 @@ class LocalDocIngestor:
                 "doc_id": doc_id,
                 "text": filtered_chunk,
             }
-            point_id = f"{doc_id}_{i:04d}"
+            point_id = str(uuid.uuid5(uuid.UUID(doc_id), str(i)))
             points.append(PointStruct(id=point_id, vector=vector, payload=payload))
 
         upserted = 0

@@ -167,6 +167,7 @@ except Exception as exc:
     logger.warning("Audit log middleware not loaded: %s", exc)
 
 # Shutdown hook: persist token stats and stop file watcher
+_local_doc_watcher = None  # may be replaced in Sub-project E setup below
 @app.on_event("shutdown")
 def _shutdown():
     token_tracker.flush()
@@ -177,10 +178,8 @@ def _shutdown():
     except Exception:
         pass
     # Stop local doc watcher
-    try:
-        _local_doc_watcher.stop()  # noqa: F821  # pylint: disable=possibly-used-before-assignment
-    except Exception:
-        pass
+    if _local_doc_watcher is not None:
+        _local_doc_watcher.stop()
     logger.info("Token stats flushed, file watcher stopped")
 
 # v9 extension setup is deferred to after run_chat_task / verify_token are defined (see below)
@@ -1479,6 +1478,7 @@ try:
     app.include_router(local_docs_router, dependencies=[Depends(verify_token)])
 
     _LOCAL_DOCS_ENABLED = os.getenv("LOCAL_DOCS_ENABLED", "false").lower() in ("1", "true", "yes")
+    _local_doc_watcher = None
     if _LOCAL_DOCS_ENABLED:
         _local_doc_watcher = LocalDocWatcher()
         _watch_path = os.getenv("LOCAL_DOCS_WATCH_PATH", "/opt/nanobot-stack/watched-docs/")
