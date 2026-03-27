@@ -1,19 +1,16 @@
 """Tests for migration 016 — docs_ingestion_log table."""
+import importlib
 import os
+import pathlib
 import sqlite3
 import tempfile
-import pathlib
-import pytest
 
 os.environ.setdefault("RAG_STATE_DIR", tempfile.mkdtemp())
-
-import importlib
-import sys
 
 
 def _load_migration():
     spec = importlib.util.spec_from_file_location(
-        "migration_014",
+        "migration_016",
         pathlib.Path(__file__).parent.parent / "migrations" / "016_local_docs.py",
     )
     mod = importlib.util.module_from_spec(spec)

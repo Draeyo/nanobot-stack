@@ -1,0 +1,42 @@
+[MASTER]
+# Ensure src/bridge is importable when running pylint from this directory
+init-hook='import sys; sys.path.insert(0, ".")'
+# Allow importing third-party packages without install in CI base environment
+ignored-modules=dotenv,fastapi,litellm,pydantic,qdrant_client,langfuse,starlette,httpx,mcp,sentence_transformers,pythonjsonlogger,prometheus_fastapi_instrumentator,pypdf,docx,bs4,apscheduler,croniter,pii_scanner,pytest
+
+[FORMAT]
+# Project uses longer lines; 200 chars is a practical upper limit
+max-line-length=200
+
+[MESSAGES CONTROL]
+disable=
+    C0116,  # missing-function-docstring
+    C0115,  # missing-class-docstring
+    C0302,  # too-many-lines
+    C0321,  # multiple-statements
+    C0410,  # multiple-imports
+    C0415,  # import-outside-toplevel
+    C0103,  # invalid-name (module-level private vars use lowercase)
+    W0718,  # broad-exception-caught (intentional resilience pattern)
+    W0603,  # global-statement (needed for module-level state)
+    W0707,  # raise-missing-from
+    R0903,  # too-few-public-methods (Pydantic models)
+    R0913,  # too-many-arguments
+    R0917,  # too-many-positional-arguments
+    R0914,  # too-many-locals
+    R0912,  # too-many-branches
+    R0911,  # too-many-return-statements
+    R0915,  # too-many-statements
+    R1705,  # no-else-return
+    R0801,  # duplicate-code
+    R0902,  # too-many-instance-attributes
+    R1702,  # too-many-nested-blocks
+    W0122,  # exec-used (sandboxed code interpreter)
+    W1309,  # f-string-without-interpolation
+
+[DESIGN]
+max-args=10
+max-locals=20
+max-branches=15
+max-returns=8
+max-statements=60

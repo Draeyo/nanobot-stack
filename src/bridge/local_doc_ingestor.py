@@ -20,17 +20,17 @@ MAX_FILE_BYTES = 50 * 1024 * 1024  # 50 MB
 
 # Lazy import guards
 try:
-    import pypdf as pypdf  # type: ignore[import]
+    import pypdf  # type: ignore[import]
 except ImportError:
     pypdf = None  # type: ignore[assignment]
 
 try:
-    import docx as docx  # type: ignore[import]  # python-docx
+    import docx  # type: ignore[import]  # python-docx
 except ImportError:
     docx = None  # type: ignore[assignment]
 
 try:
-    import litellm as litellm  # type: ignore[import]
+    import litellm  # type: ignore[import]
 except ImportError:
     litellm = None  # type: ignore[assignment]
 
@@ -241,7 +241,7 @@ class LocalDocIngestor:
     # Chunking
     # ------------------------------------------------------------------
 
-    def _chunk_text(self, text: str, title: str) -> list[str]:
+    def _chunk_text(self, text: str, _title: str) -> list[str]:
         """Sliding-window chunker on sentence boundaries."""
         overlap_chars = self._chunk_overlap * 4
         size_chars = self._chunk_size * 4
@@ -450,7 +450,7 @@ class LocalDocIngestor:
             "tags": meta["tags"],
             "ingested_at": self._now(),
         }
-        upserted = self._embed_and_upsert(chunks, metadata)
+        self._embed_and_upsert(chunks, metadata)
 
         self._upsert_log(doc_id, file_path, file_hash, fmt, len(chunks), "indexed")
         return IngestResult(

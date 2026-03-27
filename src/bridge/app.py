@@ -178,7 +178,7 @@ def _shutdown():
         pass
     # Stop local doc watcher
     try:
-        _local_doc_watcher.stop()  # noqa: F821
+        _local_doc_watcher.stop()  # noqa: F821  # pylint: disable=possibly-used-before-assignment
     except Exception:
         pass
     logger.info("Token stats flushed, file watcher stopped")
