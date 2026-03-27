@@ -12,7 +12,7 @@
 
 ## Migration number check
 
-Existing migrations: 008, 010, 011, 012, 013, 015. Slot **014** is free — use `migrations/014_local_docs.py`.
+Existing migrations: 008, 010, 011, 012, 013, 015. Slot **014** is free — use `migrations/016_local_docs.py`.
 
 > `pypdf>=5.0` and `python-docx>=1.1` are already present in `requirements.txt`. Only `watchdog>=3.0` needs to be added.
 
@@ -40,7 +40,7 @@ import sys
 def _load_migration():
     spec = importlib.util.spec_from_file_location(
         "migration_014",
-        pathlib.Path(__file__).parent.parent / "migrations" / "014_local_docs.py",
+        pathlib.Path(__file__).parent.parent / "migrations" / "016_local_docs.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -105,10 +105,10 @@ python -m pytest tests/test_migration_014.py -v 2>&1 | head -30
 
 ### Implementation
 
-**File:** `migrations/014_local_docs.py`
+**File:** `migrations/016_local_docs.py`
 
 ```python
-"""014_local_docs — docs_ingestion_log table."""
+"""016_local_docs — docs_ingestion_log table."""
 from __future__ import annotations
 
 import logging
@@ -116,7 +116,7 @@ import os
 import pathlib
 import sqlite3
 
-VERSION = 14
+VERSION = 16
 
 logger = logging.getLogger("migration.v14")
 STATE_DIR = pathlib.Path(os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state"))
@@ -180,12 +180,12 @@ python -m pytest tests/test_migration_014.py -v
 
 **Commit:**
 ```
-feat(migration): add 014_local_docs — docs_ingestion_log table with status/type/hash indexes
+feat(migration): add 016_local_docs — docs_ingestion_log table with status/type/hash indexes
 ```
 
 - [ ] Write test file `tests/test_migration_014.py`
 - [ ] Run tests (expect red)
-- [ ] Create `migrations/014_local_docs.py`
+- [ ] Create `migrations/016_local_docs.py`
 - [ ] Run tests (expect green)
 - [ ] Commit
 
@@ -251,7 +251,7 @@ def ingestor(tmp_state, mock_qdrant):
     import importlib.util, pathlib as _pl
     spec = importlib.util.spec_from_file_location(
         "migration_014",
-        _pl.Path(__file__).parent.parent / "migrations" / "014_local_docs.py",
+        _pl.Path(__file__).parent.parent / "migrations" / "016_local_docs.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -272,7 +272,7 @@ def test_disabled_flag(tmp_state, mock_qdrant):
         import importlib.util, pathlib as _pl
         spec = importlib.util.spec_from_file_location(
             "migration_014",
-            _pl.Path(__file__).parent.parent / "migrations" / "014_local_docs.py",
+            _pl.Path(__file__).parent.parent / "migrations" / "016_local_docs.py",
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -1839,7 +1839,7 @@ def test_api_ingest_endpoint(tmp_state, mock_qdrant, monkeypatch):
     import importlib.util, pathlib as _pl
     spec = importlib.util.spec_from_file_location(
         "migration_014",
-        _pl.Path(__file__).parent.parent / "migrations" / "014_local_docs.py",
+        _pl.Path(__file__).parent.parent / "migrations" / "016_local_docs.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -1874,7 +1874,7 @@ def test_api_ingest_outside_path(tmp_state, mock_qdrant):
     import importlib.util, pathlib as _pl
     spec = importlib.util.spec_from_file_location(
         "migration_014",
-        _pl.Path(__file__).parent.parent / "migrations" / "014_local_docs.py",
+        _pl.Path(__file__).parent.parent / "migrations" / "016_local_docs.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -1906,7 +1906,7 @@ def test_api_list_and_delete(tmp_state, mock_qdrant, monkeypatch):
     import importlib.util, pathlib as _pl
     spec = importlib.util.spec_from_file_location(
         "migration_014",
-        _pl.Path(__file__).parent.parent / "migrations" / "014_local_docs.py",
+        _pl.Path(__file__).parent.parent / "migrations" / "016_local_docs.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -1954,7 +1954,7 @@ def test_api_status_endpoint(tmp_state, mock_qdrant, monkeypatch):
     import importlib.util, pathlib as _pl
     spec = importlib.util.spec_from_file_location(
         "migration_014",
-        _pl.Path(__file__).parent.parent / "migrations" / "014_local_docs.py",
+        _pl.Path(__file__).parent.parent / "migrations" / "016_local_docs.py",
     )
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
@@ -1993,7 +1993,7 @@ def test_api_disabled(tmp_state, mock_qdrant):
         import importlib.util, pathlib as _pl
         spec = importlib.util.spec_from_file_location(
             "migration_014",
-            _pl.Path(__file__).parent.parent / "migrations" / "014_local_docs.py",
+            _pl.Path(__file__).parent.parent / "migrations" / "016_local_docs.py",
         )
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
@@ -2340,7 +2340,7 @@ test(local-docs): add fixture generator script, complete test suite for sub-proj
 
 | File | Action |
 |------|--------|
-| `migrations/014_local_docs.py` | Create — `docs_ingestion_log` table + 3 indexes |
+| `migrations/016_local_docs.py` | Create — `docs_ingestion_log` table + 3 indexes |
 | `src/bridge/local_doc_ingestor.py` | Create — `LocalDocIngestor` + `LocalDocWatcher` |
 | `src/bridge/local_docs_api.py` | Create — `GET /api/docs/`, `POST /api/docs/ingest`, `DELETE /api/docs/{doc_id}`, `GET /api/docs/status` |
 | `src/bridge/app.py` | Modify — mount local_docs_api, start watcher, shutdown hook |

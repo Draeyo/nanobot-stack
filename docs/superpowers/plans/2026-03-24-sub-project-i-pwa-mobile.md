@@ -17,7 +17,7 @@ Key file locations and patterns observed:
 - **HTML assembly:** `src/bridge/admin_ui.py` builds the full SPA in `build_admin_html()` (line 1525). The `<head>` is at line 1528–1533. The `</body>` closing is at line 1555. PWA tags go into the f-string at the `<head>` block; the SW registration script and `#mobile-chat-view` div go just before `</body></html>`.
 - **Static files:** `src/bridge/static/` does **not yet exist** — must be created, then mounted in `app.py`.
 - **Migration pattern:** `migrations/015_backup_log.py` — `VERSION` int constant, `check()` queries `sqlite_master`, `migrate()` runs DDL with `PRAGMA journal_mode=WAL`, commits, logs. DB path is `STATE_DIR / "scheduler.db"`.
-- **Next migration number:** Highest existing is `015`. No `016` file exists yet. Use **`016_push_subscriptions.py`** (the spec draft referenced 017 before 016 was planned in this project).
+- **Next migration number:** Highest existing is `015`. No `016` file exists yet. Use **`019_push_subscriptions.py`** (the spec draft referenced 017 before 016 was planned in this project).
 - **BroadcastNotifier:** `src/bridge/broadcast_notifier.py` — `VALID_CHANNELS` frozenset, `broadcast(channels, message)` fans out via `asyncio.gather`. The new `webpush` channel needs a `_deliver_webpush()` async method and `webpush` added to `VALID_CHANNELS`.
 - **app.py pattern:** Router imports at top, `include_router` calls in the app setup. StaticFiles mount goes via `app.mount("/static", StaticFiles(...), name="static")`.
 - **Dep to add:** `pywebpush>=2.0` to `src/bridge/requirements.txt`.
@@ -26,7 +26,7 @@ Key file locations and patterns observed:
 
 ## Task 1 — Migration: `push_subscriptions` table
 
-**File:** `migrations/016_push_subscriptions.py`
+**File:** `migrations/019_push_subscriptions.py`
 
 ### Test first
 
@@ -34,10 +34,10 @@ No automated pytest for migrations (consistent with existing migration tests pat
 
 ### Implementation
 
-- [ ] Create `migrations/016_push_subscriptions.py`:
+- [ ] Create `migrations/019_push_subscriptions.py`:
 
 ```python
-"""016_push_subscriptions — push_subscriptions table for Web Push VAPID."""
+"""019_push_subscriptions — push_subscriptions table for Web Push VAPID."""
 from __future__ import annotations
 
 import logging
@@ -45,7 +45,7 @@ import os
 import pathlib
 import sqlite3
 
-VERSION = 16
+VERSION = 19
 
 logger = logging.getLogger("migration.v16")
 STATE_DIR = pathlib.Path(os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state"))
@@ -104,7 +104,7 @@ def migrate(_ctx: dict) -> None:
 ### Commit
 
 ```
-git add migrations/016_push_subscriptions.py
+git add migrations/019_push_subscriptions.py
 git commit -m "feat(migration): add push_subscriptions table (migration 016)"
 ```
 

@@ -28,10 +28,10 @@
 
 ---
 
-## Task 1 — Migration `migrations/016_memory_decay_feedback.py`
+## Task 1 — Migration `migrations/018_memory_decay_feedback.py`
 
 ### What
-Create `migrations/016_memory_decay_feedback.py` that:
+Create `migrations/018_memory_decay_feedback.py` that:
 1. Adds four columns to the existing `feedback` table in `feedback.db`
 2. Creates `memory_decay_log` table with indexes
 3. Creates `routing_adjustments` table
@@ -75,13 +75,13 @@ def state_dir(tmp_path, monkeypatch):
 
 def test_check_returns_false_before_migration(state_dir):
     import importlib
-    m = importlib.import_module("016_memory_decay_feedback")
+    m = importlib.import_module("018_memory_decay_feedback")
     assert m.check({}) is False
 
 
 def test_migrate_creates_memory_decay_log(state_dir):
     import importlib
-    m = importlib.import_module("016_memory_decay_feedback")
+    m = importlib.import_module("018_memory_decay_feedback")
     m.migrate({})
     db = sqlite3.connect(str(state_dir / "feedback.db"))
     tables = {r[0] for r in db.execute(
@@ -93,7 +93,7 @@ def test_migrate_creates_memory_decay_log(state_dir):
 
 def test_migrate_creates_routing_adjustments(state_dir):
     import importlib
-    m = importlib.import_module("016_memory_decay_feedback")
+    m = importlib.import_module("018_memory_decay_feedback")
     m.migrate({})
     db = sqlite3.connect(str(state_dir / "feedback.db"))
     tables = {r[0] for r in db.execute(
@@ -105,7 +105,7 @@ def test_migrate_creates_routing_adjustments(state_dir):
 
 def test_migrate_adds_feedback_columns(state_dir):
     import importlib
-    m = importlib.import_module("016_memory_decay_feedback")
+    m = importlib.import_module("018_memory_decay_feedback")
     m.migrate({})
     db = sqlite3.connect(str(state_dir / "feedback.db"))
     cols = {r[1] for r in db.execute("PRAGMA table_info(feedback)").fetchall()}
@@ -118,21 +118,21 @@ def test_migrate_adds_feedback_columns(state_dir):
 
 def test_check_returns_true_after_migration(state_dir):
     import importlib
-    m = importlib.import_module("016_memory_decay_feedback")
+    m = importlib.import_module("018_memory_decay_feedback")
     m.migrate({})
     assert m.check({}) is True
 
 
 def test_migrate_is_idempotent(state_dir):
     import importlib
-    m = importlib.import_module("016_memory_decay_feedback")
+    m = importlib.import_module("018_memory_decay_feedback")
     m.migrate({})
     m.migrate({})  # second run must not raise
 
 
 def test_memory_decay_log_schema(state_dir):
     import importlib
-    m = importlib.import_module("016_memory_decay_feedback")
+    m = importlib.import_module("018_memory_decay_feedback")
     m.migrate({})
     db = sqlite3.connect(str(state_dir / "feedback.db"))
     cols = {r[1] for r in db.execute("PRAGMA table_info(memory_decay_log)").fetchall()}
@@ -142,7 +142,7 @@ def test_memory_decay_log_schema(state_dir):
 
 def test_routing_adjustments_schema(state_dir):
     import importlib
-    m = importlib.import_module("016_memory_decay_feedback")
+    m = importlib.import_module("018_memory_decay_feedback")
     m.migrate({})
     db = sqlite3.connect(str(state_dir / "feedback.db"))
     cols = {r[1] for r in db.execute("PRAGMA table_info(routing_adjustments)").fetchall()}
@@ -153,15 +153,15 @@ def test_routing_adjustments_schema(state_dir):
 Run (red):
 ```bash
 cd /opt/nanobot-stack/rag-bridge && python -m pytest tests/test_migration_016.py -v
-# Expected: ModuleNotFoundError for 016_memory_decay_feedback
+# Expected: ModuleNotFoundError for 018_memory_decay_feedback
 ```
 
 ### Green — implement
 
-- [ ] Create `migrations/016_memory_decay_feedback.py`:
+- [ ] Create `migrations/018_memory_decay_feedback.py`:
 
 ```python
-"""016_memory_decay_feedback — memory decay log, routing adjustments, feedback extension."""
+"""018_memory_decay_feedback — memory decay log, routing adjustments, feedback extension."""
 from __future__ import annotations
 
 import logging
@@ -169,7 +169,7 @@ import os
 import pathlib
 import sqlite3
 
-VERSION = 16
+VERSION = 18
 
 logger = logging.getLogger("migration.v16")
 STATE_DIR = pathlib.Path(os.getenv("RAG_STATE_DIR", "/opt/nanobot-stack/rag-bridge/state"))
@@ -255,7 +255,7 @@ cd /opt/nanobot-stack/rag-bridge && python -m pytest tests/test_migration_016.py
 
 ### Commit
 ```
-git add migrations/016_memory_decay_feedback.py tests/test_migration_016.py
+git add migrations/018_memory_decay_feedback.py tests/test_migration_016.py
 git commit -m "feat(migration): add 016 — memory_decay_log, routing_adjustments, feedback extension"
 ```
 
@@ -2382,7 +2382,7 @@ After all tasks pass, create a clean integration commit tying everything togethe
 
 ### Checklist
 
-- [ ] `migrations/016_memory_decay_feedback.py` — VERSION=16, check(), migrate()
+- [ ] `migrations/018_memory_decay_feedback.py` — VERSION=16, check(), migrate()
 - [ ] `src/bridge/memory_decay.py` — MemoryDecayManager complete
 - [ ] `src/bridge/feedback_learner.py` — FeedbackLearner complete
 - [ ] `src/bridge/adaptive_router.py` — routing adjustments applied
@@ -2433,7 +2433,7 @@ git commit -m "feat(sub-project-h): complete Memory Decay & Feedback Loop implem
 
 | File | Action |
 |------|--------|
-| `migrations/016_memory_decay_feedback.py` | Create |
+| `migrations/018_memory_decay_feedback.py` | Create |
 | `src/bridge/memory_decay.py` | Create |
 | `src/bridge/feedback_learner.py` | Create |
 | `src/bridge/memory_api.py` | Create |
