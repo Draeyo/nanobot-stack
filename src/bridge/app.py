@@ -176,6 +176,11 @@ def _shutdown():
             watcher.stop()
     except Exception:
         pass
+    # Stop local doc watcher
+    try:
+        _local_doc_watcher.stop()  # noqa: F821
+    except Exception:
+        pass
     logger.info("Token stats flushed, file watcher stopped")
 
 # v9 extension setup is deferred to after run_chat_task / verify_token are defined (see below)
@@ -1461,6 +1466,28 @@ try:
     logger.info("RSS endpoints mounted (/api/rss/*)")
 except Exception as exc:
     logger.info("RSS API not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Sub-project E: Local Document Ingestion
+# ---------------------------------------------------------------------------
+try:
+    from local_doc_ingestor import LocalDocIngestor, LocalDocWatcher
+    from local_docs_api import router as local_docs_router, init_local_docs_api
+
+    _local_doc_ingestor = LocalDocIngestor(state_dir=STATE_DIR, qdrant_client=qdrant)
+    init_local_docs_api(ingestor=_local_doc_ingestor)
+    app.include_router(local_docs_router, dependencies=[Depends(verify_token)])
+
+    _LOCAL_DOCS_ENABLED = os.getenv("LOCAL_DOCS_ENABLED", "false").lower() in ("1", "true", "yes")
+    if _LOCAL_DOCS_ENABLED:
+        _local_doc_watcher = LocalDocWatcher()
+        _watch_path = os.getenv("LOCAL_DOCS_WATCH_PATH", "/opt/nanobot-stack/watched-docs/")
+        _local_doc_watcher.start(path=_watch_path, ingestor=_local_doc_ingestor)
+        logger.info("LocalDocWatcher started on %s", _watch_path)
+
+    logger.info("Local Docs endpoints mounted (/api/docs/*)")
+except Exception as exc:
+    logger.info("Local Docs API not loaded: %s", exc)
 
 # ---------------------------------------------------------------------------
 # Sub-project F: Backup & Restore
