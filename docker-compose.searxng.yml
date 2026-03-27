@@ -1,0 +1,29 @@
+# SearXNG service for Sub-project D — Web Search
+# Merge with main docker-compose.yml:
+#   docker compose -f docker-compose.yml -f docker-compose.searxng.yml up -d
+#
+# Or add this service block directly to your docker-compose.yml under `services:`.
+
+services:
+  searxng:
+    image: searxng/searxng:latest
+    container_name: nanobot-searxng
+    restart: unless-stopped
+    networks:
+      - nanobot-net
+    volumes:
+      - ./searxng:/etc/searxng:rw
+    environment:
+      - SEARXNG_SECRET_KEY=${SEARXNG_SECRET_KEY}
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
