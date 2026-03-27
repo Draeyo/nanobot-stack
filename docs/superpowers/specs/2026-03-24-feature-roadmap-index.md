@@ -202,7 +202,7 @@ Plan : [`../plans/2026-03-24-sub-project-c-rss-ingestion.md`](../plans/2026-03-2
 
 ---
 
-## Phase 4 — Features Avancées (Planifié)
+## Phase 4 — Features Avancées ✅ Implémentées
 
 ### 4.1 Admin UI v2 — Onglets manquants 🔧
 
@@ -220,7 +220,7 @@ Les onglets suivants sont spécifiés dans le v10 evolution design mais pas enco
 ### 4.2 Sous-projet D — Recherche Web (SearXNG) ✅
 
 Spec : [`2026-03-24-sub-project-d-web-search.md`](2026-03-24-sub-project-d-web-search.md)
-Branche : `feature/sub-d-web-search` — PR ouverte — **157 tests ✅ pylint 10.00/10**
+Mergé sur `main` — **157 tests ✅ pylint 10.00/10**
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -234,7 +234,7 @@ Branche : `feature/sub-d-web-search` — PR ouverte — **157 tests ✅ pylint 1
 ### 4.3 Sous-projet E — Ingestion Documents Locaux ✅
 
 Spec : [`2026-03-24-sub-project-e-local-docs.md`](2026-03-24-sub-project-e-local-docs.md)
-Branche : `feature/sub-e-local-docs` — PR ouverte — **125 tests ✅ pylint 10.00/10**
+Mergé sur `main` — **125 tests ✅ pylint 10.00/10**
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -299,7 +299,7 @@ Commits sur main : `5b9c95e` → `8c43c5b` — **186 tests ✅ pylint 10.00/10**
 ### 4.7 Sous-projet I — Progressive Web App Mobile ✅
 
 Spec : [`2026-03-24-sub-project-i-pwa-mobile.md`](2026-03-24-sub-project-i-pwa-mobile.md)
-Branche : `feature/sub-i-pwa` — PR ouverte
+Mergé sur `main`
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -315,7 +315,7 @@ Branche : `feature/sub-i-pwa` — PR ouverte
 ### 4.8 Sous-projet J — Intégrations Développeur (GitHub & Obsidian) ✅
 
 Spec : [`2026-03-24-sub-project-j-dev-integrations.md`](2026-03-24-sub-project-j-dev-integrations.md)
-Branche : `feature/sub-j-dev-integrations` — PR ouverte
+Mergé sur `main`
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -331,7 +331,7 @@ Branche : `feature/sub-j-dev-integrations` — PR ouverte
 ### 4.9 Sous-projet K — Browser Automation (Playwright) ✅
 
 Spec : [`2026-03-24-sub-project-k-browser-automation.md`](2026-03-24-sub-project-k-browser-automation.md)
-Branche : `feature/sub-k-browser-automation` — PR ouverte — **357 tests ✅ pylint 10.00/10**
+Mergé sur `main` — **357 tests ✅ pylint 10.00/10**
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -348,7 +348,7 @@ Branche : `feature/sub-k-browser-automation` — PR ouverte — **357 tests ✅ 
 ### 4.10 Sous-projet L — Chiffrement At-Rest ✅
 
 Spec : [`2026-03-24-sub-project-l-encryption-at-rest.md`](2026-03-24-sub-project-l-encryption-at-rest.md)
-Branche : `feature/sub-l-encryption-at-rest` — PR ouverte — **396 tests ✅ pylint 10.00/10**
+Mergé sur `main` — **396 tests ✅ pylint 10.00/10**
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|

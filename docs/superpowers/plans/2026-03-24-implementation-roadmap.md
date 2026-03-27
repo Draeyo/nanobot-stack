@@ -19,17 +19,15 @@
 | 011 | `migrations/011_scheduler.py` | ✅ deployed |
 | 012 | `migrations/012_email_calendar.py` | ✅ deployed |
 | 013 | `migrations/013_rss.py` | ✅ deployed |
-| **014** | **`migrations/014_web_search.py`** | **→ Sub-D** |
+| 014 | `migrations/014_web_search.py` | ✅ deployed |
 | 015 | `migrations/015_backup_log.py` | ✅ deployed |
-| **016** | **`migrations/016_local_docs.py`** | **→ Sub-E** |
-| **017** | **`migrations/017_voice.py`** | **→ Sub-G** |
-| **018** | **`migrations/018_memory_decay.py`** | **→ Sub-H** |
-| **019** | **`migrations/019_push_subscriptions.py`** | **→ Sub-I** |
-| **020** | **`migrations/020_github_obsidian.py`** | **→ Sub-J** |
-| **021** | **`migrations/021_browser.py`** | **→ Sub-K** |
-| *(none)* | *(field-level, no DDL)* | **→ Sub-L** |
-
-> ⚠️ **The individual plans for Sub-E, Sub-G, Sub-H, Sub-I, Sub-J, Sub-K all contain wrong migration numbers.** Step 0 of each task below is to patch the plan file before execution.
+| 016 | `migrations/016_local_docs.py` | ✅ deployed |
+| 017 | `migrations/017_voice.py` | ✅ deployed |
+| 018 | `migrations/018_memory_decay.py` | ✅ deployed |
+| 019 | `migrations/019_push_subscriptions.py` | ✅ deployed |
+| 020 | `migrations/020_github_obsidian.py` | ✅ deployed |
+| 021 | `migrations/021_browser.py` | ✅ deployed |
+| *(none)* | *(field-level, no DDL)* | ✅ deployed |
 
 ---
 
@@ -84,35 +82,35 @@ Every sub-project that adds a router or job touches the same files. Always merge
 - Modify: `docs/superpowers/plans/2026-03-24-sub-project-j-dev-integrations.md`
 - Modify: `docs/superpowers/plans/2026-03-24-sub-project-k-browser-automation.md`
 
-- [ ] **Step 1: Patch Sub-E (014 → 016)**
+- [x] **Step 1: Patch Sub-E (014 → 016)**
 
 ```bash
 sed -i 's/014_local_docs/016_local_docs/g; s/VERSION = 14/VERSION = 16/g' \
   docs/superpowers/plans/2026-03-24-sub-project-e-local-docs.md
 ```
 
-- [ ] **Step 2: Patch Sub-G (014 → 017)**
+- [x] **Step 2: Patch Sub-G (014 → 017)**
 
 ```bash
 sed -i 's/014_voice/017_voice/g; s/VERSION = 14/VERSION = 17/g' \
   docs/superpowers/plans/2026-03-24-sub-project-g-voice-interface.md
 ```
 
-- [ ] **Step 3: Patch Sub-H (016 → 018)**
+- [x] **Step 3: Patch Sub-H (016 → 018)**
 
 ```bash
 sed -i 's/016_memory_decay/018_memory_decay/g; s/VERSION = 16/VERSION = 18/g' \
   docs/superpowers/plans/2026-03-24-sub-project-h-memory-decay.md
 ```
 
-- [ ] **Step 4: Patch Sub-I (016 → 019)**
+- [x] **Step 4: Patch Sub-I (016 → 019)**
 
 ```bash
 sed -i 's/016_push_subscriptions/019_push_subscriptions/g; s/VERSION = 16/VERSION = 19/g' \
   docs/superpowers/plans/2026-03-24-sub-project-i-pwa-mobile.md
 ```
 
-- [ ] **Step 5: Patch Sub-J (016 or 018 → 020)**
+- [x] **Step 5: Patch Sub-J (016 or 018 → 020)**
 
 ```bash
 sed -i 's/016_github_obsidian/020_github_obsidian/g; \
@@ -122,14 +120,14 @@ sed -i 's/016_github_obsidian/020_github_obsidian/g; \
   docs/superpowers/plans/2026-03-24-sub-project-j-dev-integrations.md
 ```
 
-- [ ] **Step 6: Patch Sub-K (019 → 021)**
+- [x] **Step 6: Patch Sub-K (019 → 021)**
 
 ```bash
 sed -i 's/019_browser/021_browser/g; s/VERSION = 19/VERSION = 21/g' \
   docs/superpowers/plans/2026-03-24-sub-project-k-browser-automation.md
 ```
 
-- [ ] **Step 7: Verify no plan still references a duplicate migration**
+- [x] **Step 7: Verify no plan still references a duplicate migration**
 
 ```bash
 grep -rn "VERSION = 1[46]" docs/superpowers/plans/
@@ -138,7 +136,7 @@ grep -rn "migrations/014" docs/superpowers/plans/ | grep -v sub-project-d
 # Expected: zero matches
 ```
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add docs/superpowers/plans/
@@ -181,11 +179,10 @@ gh pr create --title "feat: Admin UI v2 — automated tests for trust/cost/workf
 
 ---
 
-### Task 2: Sub-D — Web Search (SearXNG) ✅ IMPLEMENTED
+### Task 2: Sub-D — Web Search (SearXNG) ✅ MERGED ON MAIN
 
 **Plan:** `docs/superpowers/plans/2026-03-24-sub-project-d-web-search.md`
 **Migration:** 014
-**Branch:** `feature/sub-d-web-search` — pushed, PR open
 **Tests:** 157 passing — pylint 10.00/10
 
 Notable implementation:
@@ -195,19 +192,14 @@ Notable implementation:
 - `SEARXNG_ENABLED=false` default — all paths guarded
 
 - [x] **Step 1–5: Implemented, spec-reviewed, quality-reviewed**
-- [ ] **Step 6: PR → merge → delete branch**
-
-```bash
-# PR open at https://github.com/Draeyo/nanobot-stack/compare/feature/sub-d-web-search
-```
+- [x] **Step 6: PR → merge → delete branch**
 
 ---
 
-### Task 3: Sub-E — Local Document Ingestion ✅ IMPLEMENTED
+### Task 3: Sub-E — Local Document Ingestion ✅ MERGED ON MAIN
 
 **Plan:** `docs/superpowers/plans/2026-03-24-sub-project-e-local-docs.md`
 **Migration:** 016
-**Branch:** `feature/sub-e-local-docs` — pushed, PR open
 **Tests:** 125 passing — pylint 10.00/10
 
 Notable implementation:
@@ -217,11 +209,7 @@ Notable implementation:
 - `LOCAL_DOCS_ENABLED=false` default; watcher only started when enabled
 
 - [x] **Step 1–5: Implemented, spec-reviewed, quality-reviewed**
-- [ ] **Step 6: PR → merge → delete branch**
-
-```bash
-# PR open at https://github.com/Draeyo/nanobot-stack/compare/feature/sub-e-local-docs
-```
+- [x] **Step 6: PR → merge → delete branch**
 
 ---
 
@@ -254,41 +242,30 @@ Notable implementation:
 
 ---
 
-### Task 6: Sub-I — PWA Mobile ✅ IMPLEMENTED
+### Task 6: Sub-I — PWA Mobile ✅ MERGED ON MAIN
 
 **Plan:** `docs/superpowers/plans/2026-03-24-sub-project-i-pwa-mobile.md`
 **Migration:** 019
-**Branch:** `feature/sub-i-pwa` — pushed, PR open
 
 - [x] **Step 1–5: Implemented and reviewed**
-- [ ] **Step 6: PR → merge → delete branch**
-
-```bash
-# PR open at https://github.com/Draeyo/nanobot-stack/compare/feature/sub-i-pwa
-```
+- [x] **Step 6: PR → merge → delete branch**
 
 ---
 
-### Task 7: Sub-J — GitHub & Obsidian Integrations ✅ IMPLEMENTED
+### Task 7: Sub-J — GitHub & Obsidian Integrations ✅ MERGED ON MAIN
 
 **Plan:** `docs/superpowers/plans/2026-03-24-sub-project-j-dev-integrations.md`
 **Migration:** 020
-**Branch:** `feature/sub-j-dev-integrations` — pushed, PR open
 
 - [x] **Step 1–5: Implemented and reviewed**
-- [ ] **Step 6: PR → merge → delete branch**
-
-```bash
-# PR open at https://github.com/Draeyo/nanobot-stack/compare/feature/sub-j-dev-integrations
-```
+- [x] **Step 6: PR → merge → delete branch**
 
 ---
 
-### Task 8: Sub-K — Browser Automation ✅ IMPLEMENTED
+### Task 8: Sub-K — Browser Automation ✅ MERGED ON MAIN
 
 **Plan:** `docs/superpowers/plans/2026-03-24-sub-project-k-browser-automation.md`
 **Migration:** 021
-**Branch:** `feature/sub-k-browser-automation` — pushed, PR open
 **Tests:** 357 passing — pylint 10.00/10
 
 Notable implementation decisions:
@@ -297,19 +274,14 @@ Notable implementation decisions:
 - Domain allowlist: `allowed[4:] if allowed.startswith("www.") else allowed` (not `lstrip` which corrupts entries)
 
 - [x] **Step 1–5: Implemented, spec-reviewed, quality-reviewed**
-- [ ] **Step 6: PR → merge → delete branch**
-
-```bash
-# PR open at https://github.com/Draeyo/nanobot-stack/compare/feature/sub-k-browser-automation
-```
+- [x] **Step 6: PR → merge → delete branch**
 
 ---
 
-### Task 9: Sub-L — Encryption At-Rest ✅ IMPLEMENTED ⚠️ FINAL — run last
+### Task 9: Sub-L — Encryption At-Rest ✅ MERGED ON MAIN
 
 **Plan:** `docs/superpowers/plans/2026-03-24-sub-project-l-encryption-at-rest.md`
 **Migration:** none (field-level encryption, no DDL changes)
-**Branch:** `feature/sub-l-encryption-at-rest` — pushed, PR open
 **Tests:** 396 passing (39 new) — pylint 10.00/10
 
 Notable implementation decisions:
@@ -321,11 +293,7 @@ Notable implementation decisions:
 - Per-row/per-point error isolation in all migration paths
 
 - [x] **Step 1–5: Implemented, spec-reviewed, quality-reviewed**
-- [ ] **Step 6: PR → merge → delete branch**
-
-```bash
-# PR open at https://github.com/Draeyo/nanobot-stack/compare/feature/sub-l-encryption-at-rest
-```
+- [x] **Step 6: PR → merge → delete branch**
 
 ---
 
