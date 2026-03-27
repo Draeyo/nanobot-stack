@@ -1,0 +1,19 @@
+src:
+  - changed-files:
+    - any-glob-to-any-file: 'src/**'
+
+tests:
+  - changed-files:
+    - any-glob-to-any-file: 'tests/**'
+
+migrations:
+  - changed-files:
+    - any-glob-to-any-file: 'migrations/**'
+
+docs:
+  - changed-files:
+    - any-glob-to-any-file: 'docs/**'
+
+ci:
+  - changed-files:
+    - any-glob-to-any-file: '.github/**'
