@@ -1541,3 +1541,19 @@ try:
     logger.info("Voice endpoints mounted (/api/voice/*)")
 except Exception as exc:
     logger.info("Voice API not loaded: %s", exc)
+
+# ---------------------------------------------------------------------------
+# Sub-project J: GitHub & Obsidian Integrations
+# ---------------------------------------------------------------------------
+try:
+    from dev_integrations_api import router as dev_integrations_router, init_dev_integrations_api
+    from dev_integrations import DevIntegrationManager
+    _dev_mgr = DevIntegrationManager(
+        db_path=STATE_DIR / "scheduler.db",
+        qdrant_client=qdrant,
+    )
+    init_dev_integrations_api(_dev_mgr)
+    app.include_router(dev_integrations_router, prefix="/api/dev")
+    logger.info("Dev integrations endpoints mounted (/api/dev/*)")
+except Exception as exc:
+    logger.info("Dev integrations API not loaded: %s", exc)
