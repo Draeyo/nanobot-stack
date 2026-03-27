@@ -271,7 +271,7 @@ class WebSearchAgent(AgentBase):
     # ------------------------------------------------------------------
 
     async def _call_searxng(
-        self, query: str, params: dict[str, Any]
+        self, _query: str, params: dict[str, Any]
     ) -> list[dict]:
         """GET /search on SearXNG, return list of raw result dicts."""
         import httpx  # type: ignore[import]
