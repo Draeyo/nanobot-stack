@@ -61,6 +61,15 @@ _BACKUP_JOB = {
     "timeout_s": 3600,
 }
 
+_MEMORY_DECAY_JOB = {
+    "name": "Memory Decay Scan",
+    "cron": "0 3 * * 1",
+    "sections": ["memory_decay_scan"],
+    "channels": [],
+    "prompt": "",
+    "timeout_s": 600,
+}
+
 
 class JobRegistry:
     def __init__(self, manager: Any) -> None:
@@ -77,6 +86,11 @@ class JobRegistry:
         if _env_bool("BACKUP_ENABLED", False):
             jobs.append(_BACKUP_JOB)
             logger.info("BACKUP_ENABLED=true — registering daily_backup job")
+
+        # Register the memory decay scan job only when MEMORY_DECAY_ENABLED=true
+        if _env_bool("MEMORY_DECAY_ENABLED", False):
+            jobs.append(_MEMORY_DECAY_JOB)
+            logger.info("MEMORY_DECAY_ENABLED=true — registering Memory Decay Scan job")
 
         for job in jobs:
             self._mgr.create_job(
