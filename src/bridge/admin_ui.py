@@ -14,120 +14,200 @@ PWA_ENABLED = os.getenv("PWA_ENABLED", "true").lower() == "true"
 # CSS
 # ---------------------------------------------------------------------------
 ADMIN_CSS = """
-:root{--bg:#0f1117;--card:#1a1d27;--border:#2a2d3a;--text:#e0e0e0;--muted:#888;
---green:#22c55e;--red:#ef4444;--yellow:#eab308;--blue:#3b82f6;--purple:#8b5cf6;
---cyan:#06b6d4;--input-bg:#12141d;--hover:#252836;--active-tab:#3b82f6}
+/* === Neon Observatory Design System === */
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600&family=Space+Grotesk:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root{
+  /* Surface hierarchy (tonal depth) */
+  --surface:#060e20;--surface-dim:#060e20;--surface-container-lowest:#000000;
+  --surface-container-low:#091328;--surface-container:#0f1930;
+  --surface-container-high:#141f38;--surface-container-highest:#192540;
+  --surface-bright:#1f2b49;--surface-variant:#192540;
+  /* Primary (electric violet) */
+  --primary:#bd9dff;--primary-dim:#8a4cfc;--primary-container:#b28cff;
+  --on-primary:#3c0089;--on-primary-container:#2e006c;
+  /* Secondary (cyan) */
+  --secondary:#53ddfc;--secondary-dim:#40ceed;--secondary-container:#00687a;
+  /* Tertiary (emerald) */
+  --tertiary:#9bffce;--tertiary-dim:#58e7ab;--tertiary-container:#69f6b8;
+  --on-tertiary-container:#005a3c;
+  /* Error */
+  --error:#ff6e84;--error-dim:#d73357;--error-container:#a70138;
+  /* Text */
+  --on-surface:#dee5ff;--on-surface-variant:#a3aac4;
+  /* Outline */
+  --outline:#6d758c;--outline-variant:#40485d;
+  /* Semantic aliases (backward compat) */
+  --bg:var(--surface);--card:var(--surface-container);
+  --border:rgba(64,72,93,.15);--ghost-border:rgba(64,72,93,.15);
+  --text:var(--on-surface);--muted:var(--on-surface-variant);
+  --green:var(--tertiary-dim);--red:var(--error);--yellow:#eab308;
+  --blue:var(--primary);--purple:var(--primary-dim);--cyan:var(--secondary);
+  --input-bg:var(--surface-container-lowest);--hover:var(--surface-container-high);
+  --active-tab:var(--primary);
+  /* Gradient */
+  --gradient-cta:linear-gradient(135deg,var(--primary-dim),var(--primary));
+}
+
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-background:var(--bg);color:var(--text);font-size:14px;line-height:1.5}
+body{font-family:'Inter',sans-serif;background:var(--surface);color:var(--on-surface);
+font-size:0.875rem;line-height:1.5;-webkit-font-smoothing:antialiased}
 [x-cloak]{display:none!important}
-a{color:var(--blue);text-decoration:none}
+a{color:var(--primary);text-decoration:none}
 a:hover{text-decoration:underline}
+h1,h2{font-family:'Manrope',sans-serif;font-weight:700;color:var(--on-surface);letter-spacing:-.02em}
+h2{font-size:1.5rem}
+h3{font-family:'Space Grotesk',sans-serif;font-weight:500}
 
-/* Nav */
-.topnav{background:var(--card);border-bottom:1px solid var(--border);padding:0 16px;
-display:flex;align-items:center;position:sticky;top:0;z-index:100;overflow-x:auto}
-.topnav .brand{font-weight:700;font-size:16px;color:var(--cyan);padding:12px 16px 12px 0;
-white-space:nowrap;border-right:1px solid var(--border);margin-right:8px}
-.topnav a.tab{padding:12px 14px;color:var(--muted);white-space:nowrap;font-size:13px;
-border-bottom:2px solid transparent;transition:all .15s}
-.topnav a.tab:hover{color:var(--text);text-decoration:none;background:var(--hover)}
-.topnav a.tab.active{color:var(--active-tab);border-bottom-color:var(--active-tab)}
+/* === Nav (no-border: tonal shift only) === */
+.topnav{background:var(--surface-container-low);padding:0 20px;
+display:flex;align-items:center;position:sticky;top:0;z-index:100;overflow-x:auto;
+backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+.topnav .brand{font-family:'Manrope',sans-serif;font-weight:800;font-size:15px;
+color:var(--secondary);padding:14px 20px 14px 0;white-space:nowrap;
+margin-right:12px;border-right:1px solid var(--ghost-border)}
+.topnav a.tab{padding:14px 16px;color:var(--on-surface-variant);white-space:nowrap;
+font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:500;
+border-bottom:2px solid transparent;transition:all .2s ease}
+.topnav a.tab:hover{color:var(--on-surface);text-decoration:none;background:var(--surface-container)}
+.topnav a.tab.active{color:var(--primary);border-bottom-color:var(--primary)}
 
-/* Layout */
-main{max-width:1400px;margin:0 auto;padding:16px}
+/* === Layout === */
+main{max-width:1400px;margin:0 auto;padding:20px 24px}
 section{min-height:200px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:12px;margin-bottom:16px}
-.grid-wide{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:12px;margin-bottom:16px}
-.card{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:16px}
-.card h3{font-size:14px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin-bottom:20px}
+.grid-wide{display:grid;grid-template-columns:repeat(auto-fit,minmax(460px,1fr));gap:16px;margin-bottom:20px}
 
-/* Tables */
-.tbl{width:100%;border-collapse:collapse;font-size:13px}
-.tbl th{text-align:left;padding:8px 10px;border-bottom:2px solid var(--border);color:var(--muted);
-font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px}
-.tbl td{padding:8px 10px;border-bottom:1px solid var(--border);vertical-align:top}
-.tbl tr:hover td{background:var(--hover)}
+/* === Cards (no border — tonal surface shift) === */
+.card{background:var(--surface-container);border:1px solid var(--ghost-border);
+border-radius:8px;padding:20px;transition:background .15s ease}
+.card:hover{background:var(--surface-container-high)}
+.card h3{font-size:0.75rem;color:var(--on-surface-variant);margin-bottom:10px;
+text-transform:uppercase;letter-spacing:.08em}
 
-/* Forms */
-.form-row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+/* === Tables (no divider lines — spacing-based) === */
+.tbl{width:100%;border-collapse:separate;border-spacing:0;font-size:0.8125rem}
+.tbl th{text-align:left;padding:10px 12px;color:var(--on-surface-variant);
+font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:0.6875rem;
+text-transform:uppercase;letter-spacing:.08em;
+border-bottom:1px solid var(--ghost-border)}
+.tbl td{padding:10px 12px;vertical-align:top;border-bottom:1px solid rgba(64,72,93,.08)}
+.tbl tr:hover td{background:var(--surface-container-low)}
+
+/* === Forms === */
+.form-row{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 input[type=text],input[type=number],input[type=password],textarea,select{
-background:var(--input-bg);border:1px solid var(--border);border-radius:4px;
-color:var(--text);padding:6px 10px;font-size:13px;font-family:inherit}
-input:focus,textarea:focus,select:focus{outline:none;border-color:var(--blue)}
+background:var(--surface-container-lowest);border:1px solid var(--ghost-border);
+border-radius:4px;color:var(--on-surface);padding:8px 12px;font-size:13px;
+font-family:'Inter',sans-serif;transition:border-color .2s,box-shadow .2s}
+input:focus,textarea:focus,select:focus{outline:none;border-color:var(--primary);
+box-shadow:0 0 0 3px rgba(138,76,252,.15)}
 textarea{resize:vertical;min-height:60px;width:100%}
 
-/* Buttons */
-.btn{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border:none;
-border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;color:#fff;transition:opacity .15s}
-.btn:hover{opacity:.85;text-decoration:none}
-.btn-blue{background:var(--blue)}.btn-green{background:var(--green)}
-.btn-red{background:var(--red)}.btn-yellow{background:var(--yellow);color:#000}
-.btn-muted{background:var(--border);color:var(--text)}
-.btn-sm{padding:3px 8px;font-size:11px}
+/* === Buttons (gradient CTA for primary) === */
+.btn{display:inline-flex;align-items:center;gap:4px;padding:6px 14px;border:none;
+border-radius:4px;font-family:'Space Grotesk',sans-serif;font-size:12px;font-weight:600;
+cursor:pointer;color:#fff;transition:all .2s ease}
+.btn:hover{opacity:.9;text-decoration:none;transform:translateY(-1px)}
+.btn:active{transform:translateY(0)}
+.btn-blue{background:var(--gradient-cta)}
+.btn-green{background:var(--tertiary-dim);color:var(--on-tertiary-container)}
+.btn-red{background:var(--error-dim)}
+.btn-yellow{background:var(--yellow);color:#000}
+.btn-muted{background:transparent;border:1px solid var(--ghost-border);color:var(--primary)}
+.btn-muted:hover{background:var(--surface-container-high)}
+.btn-sm{padding:4px 10px;font-size:11px}
+.btn-default{background:var(--surface-container-high);color:var(--on-surface-variant)}
 
-/* Badges */
-.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600}
-.badge-green{background:rgba(34,197,94,.15);color:var(--green)}
-.badge-red{background:rgba(239,68,68,.15);color:var(--red)}
-.badge-yellow{background:rgba(234,179,8,.15);color:var(--yellow)}
-.badge-blue{background:rgba(59,130,246,.15);color:var(--blue)}
-.badge-muted{background:rgba(136,136,136,.15);color:var(--muted)}
+/* === Badges === */
+.badge{display:inline-block;padding:2px 8px;border-radius:9999px;
+font-family:'Space Grotesk',sans-serif;font-size:11px;font-weight:600}
+.badge-green{background:rgba(88,231,171,.12);color:var(--tertiary-dim)}
+.badge-red{background:rgba(255,110,132,.12);color:var(--error)}
+.badge-yellow{background:rgba(234,179,8,.12);color:var(--yellow)}
+.badge-blue{background:rgba(189,157,255,.12);color:var(--primary)}
+.badge-muted{background:rgba(163,170,196,.1);color:var(--on-surface-variant)}
 
-/* Stat */
-.stat{font-size:28px;font-weight:700;color:var(--text)}
-.stat-label{font-size:12px;color:var(--muted);margin-top:2px}
-.mono{font-family:'Fira Code',Consolas,monospace;font-size:12px}
+/* === Stats === */
+.stat{font-family:'Manrope',sans-serif;font-size:2rem;font-weight:800;color:var(--on-surface)}
+.stat-value{font-family:'JetBrains Mono',monospace;font-size:1.5rem;font-weight:500;color:var(--on-surface)}
+.stat-label{font-family:'Space Grotesk',sans-serif;font-size:0.6875rem;
+color:var(--on-surface-variant);margin-top:4px;text-transform:uppercase;letter-spacing:.06em}
+.mono{font-family:'JetBrains Mono',monospace;font-size:12px}
 
-/* Diff */
-.diff-line{font-family:monospace;font-size:12px;padding:1px 8px;white-space:pre-wrap;word-break:break-all}
-.diff-add{background:rgba(34,197,94,.12);color:var(--green)}
-.diff-del{background:rgba(239,68,68,.12);color:var(--red)}
-.diff-hdr{color:var(--cyan);font-weight:600}
+/* === Diff === */
+.diff-line{font-family:'JetBrains Mono',monospace;font-size:12px;padding:1px 8px;
+white-space:pre-wrap;word-break:break-all}
+.diff-add{background:rgba(88,231,171,.1);color:var(--tertiary-dim)}
+.diff-del{background:rgba(255,110,132,.1);color:var(--error)}
+.diff-hdr{color:var(--secondary);font-weight:600}
 
-/* Chat */
-.chat-wrap{display:flex;flex-direction:column;height:60vh;border:1px solid var(--border);border-radius:8px;overflow:hidden}
-.chat-msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
-.chat-bubble{max-width:80%;padding:8px 12px;border-radius:12px;font-size:13px;line-height:1.5;word-wrap:break-word}
-.chat-user{align-self:flex-end;background:var(--blue);color:#fff;border-bottom-right-radius:4px}
-.chat-bot{align-self:flex-start;background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px}
-.chat-input-row{display:flex;border-top:1px solid var(--border)}
-.chat-input-row textarea{flex:1;border:none;border-radius:0;padding:10px;resize:none;height:48px}
+/* === Chat === */
+.chat-wrap{display:flex;flex-direction:column;height:60vh;background:var(--surface-container-low);
+border-radius:8px;overflow:hidden}
+.chat-msgs{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px}
+.chat-bubble{max-width:80%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.5;word-wrap:break-word}
+.chat-user{align-self:flex-end;background:var(--gradient-cta);color:#fff;border-bottom-right-radius:4px}
+.chat-bot{align-self:flex-start;background:var(--surface-container);border-bottom-left-radius:4px}
+.chat-input-row{display:flex;background:var(--surface-container)}
+.chat-input-row textarea{flex:1;border:none;border-radius:0;padding:12px;resize:none;height:48px}
 .chat-input-row .btn{border-radius:0;height:48px;padding:0 20px}
 
-/* Pipeline progress */
+/* === Pipeline === */
 .pipeline-steps{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
-.pipe-step{padding:3px 8px;border-radius:4px;font-size:11px;background:var(--border);color:var(--muted)}
-.pipe-step.done{background:rgba(34,197,94,.15);color:var(--green)}
-.pipe-step.active{background:rgba(59,130,246,.15);color:var(--blue);animation:pulse 1s infinite}
+.pipe-step{padding:3px 8px;border-radius:4px;font-family:'Space Grotesk',sans-serif;
+font-size:11px;background:var(--surface-container-high);color:var(--on-surface-variant)}
+.pipe-step.done{background:rgba(88,231,171,.12);color:var(--tertiary-dim)}
+.pipe-step.active{background:rgba(189,157,255,.12);color:var(--primary);animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
 
-/* Modal */
-.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;display:flex;align-items:center;justify-content:center}
-.modal{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:20px;max-width:700px;
-width:90%;max-height:80vh;overflow-y:auto}
-.modal h3{margin-bottom:12px}
+/* === Modal (glassmorphism) === */
+.modal-bg{position:fixed;inset:0;background:rgba(6,14,32,.7);backdrop-filter:blur(8px);
+-webkit-backdrop-filter:blur(8px);z-index:200;display:flex;align-items:center;justify-content:center}
+.modal{background:var(--surface-variant);border:1px solid var(--ghost-border);
+border-radius:12px;padding:24px;max-width:700px;width:90%;max-height:80vh;overflow-y:auto;
+backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+box-shadow:0 0 32px rgba(138,76,252,.08)}
+.modal h3{margin-bottom:14px;font-family:'Manrope',sans-serif}
 
-/* Chart container */
+/* === Chart === */
 .chart-container{position:relative;height:220px}
 
-/* Subsection tabs */
+/* === Subsection tabs === */
 .subtabs{display:flex;gap:4px;margin-bottom:12px}
-.subtabs .btn{border-radius:16px}
-.subtabs .btn.active{background:var(--blue)}
+.subtabs .btn{border-radius:9999px}
+.subtabs .btn.active{background:var(--gradient-cta)}
 
-/* Utility */
-.mb-8{margin-bottom:8px}.mb-12{margin-bottom:12px}.mb-16{margin-bottom:16px}
-.mt-8{margin-top:8px}.mt-12{margin-top:12px}
-.text-muted{color:var(--muted)}.text-green{color:var(--green)}.text-red{color:var(--red)}
-.text-sm{font-size:12px}.text-xs{font-size:11px}
+/* === Telemetry header (real-time pulse bar) === */
+.telemetry-bar{background:var(--surface-container-highest);padding:6px 16px;
+display:flex;gap:20px;align-items:center;font-family:'Space Grotesk',sans-serif;
+font-size:0.6875rem;color:var(--on-surface-variant);border-radius:6px;margin-bottom:16px}
+.telemetry-bar .pulse-dot{width:6px;height:6px;border-radius:50%;background:var(--tertiary-dim);
+animation:pulse 2s infinite}
+
+/* === Progress bar === */
+.progress-track{background:var(--surface-container-high);border-radius:4px;height:8px;overflow:hidden}
+.progress-fill{height:100%;border-radius:4px;transition:width .4s ease}
+
+/* === Utility === */
+.mb-8{margin-bottom:8px}.mb-12{margin-bottom:12px}.mb-16{margin-bottom:16px}.mb-20{margin-bottom:20px}
+.mt-8{margin-top:8px}.mt-12{margin-top:12px}.mt-16{margin-top:16px}
+.text-muted{color:var(--on-surface-variant)}.text-green{color:var(--tertiary-dim)}.text-red{color:var(--error)}
+.text-primary{color:var(--primary)}.text-secondary{color:var(--secondary)}
+.text-sm{font-size:12px}.text-xs{font-size:11px}.text-center{text-align:center}
 .flex{display:flex}.flex-between{display:flex;justify-content:space-between;align-items:center}
-.gap-8{gap:8px}.gap-12{gap:12px}
+.gap-8{gap:8px}.gap-12{gap:12px}.gap-16{gap:16px}
 .truncate{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:300px;display:inline-block}
-.pre-wrap{white-space:pre-wrap;font-family:monospace;font-size:12px;background:var(--input-bg);
-padding:8px;border-radius:4px;max-height:300px;overflow-y:auto}
-.warn-banner{background:rgba(234,179,8,.1);border:1px solid var(--yellow);border-radius:6px;
-padding:10px 14px;margin-bottom:12px;color:var(--yellow);font-size:13px}
+.pre-wrap{white-space:pre-wrap;font-family:'JetBrains Mono',monospace;font-size:12px;
+background:var(--surface-container-lowest);padding:12px;border-radius:6px;max-height:300px;overflow-y:auto}
+.warn-banner{background:rgba(234,179,8,.08);border:1px solid rgba(234,179,8,.2);border-radius:6px;
+padding:12px 16px;margin-bottom:14px;color:var(--yellow);font-size:13px}
+
+/* === Scrollbar === */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:var(--surface)}
+::-webkit-scrollbar-thumb{background:var(--outline-variant);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--outline)}
 """
 
 # ---------------------------------------------------------------------------
@@ -920,16 +1000,16 @@ SECTION_CONFIG = """
 SECTION_TRUST = """
 <section x-show="tab==='trust'" x-cloak>
   <h2 class="mb-12">Trust Policies</h2>
-  <div class="card mb-12">
+  <div class="card mb-16">
     <h3>Action Trust Levels</h3>
     <p class="text-xs text-muted mb-8">Configure how much autonomy the assistant has per action type. Changes take effect immediately.</p>
     <table class="tbl">
-      <tr><th>Action Type</th><th>Trust Level</th><th>Successes</th><th>Failures</th><th>Actions</th></tr>
+      <tr><th>Action Type</th><th>Trust Level</th><th>Successes</th><th>Failures</th><th>Auto-Promote After</th><th>Actions</th></tr>
       <template x-for="p in trustPolicies" :key="p.action_type">
         <tr>
           <td x-text="p.action_type"></td>
           <td>
-            <select :value="p.trust_level" @change="updateTrust(p.action_type,$event.target.value)" class="input" style="width:180px">
+            <select :value="p.trust_level" @change="updateTrust(p.action_type,$event.target.value)" style="width:180px">
               <option value="auto">Auto</option>
               <option value="notify_then_execute">Notify then execute</option>
               <option value="approval_required">Approval required</option>
@@ -938,22 +1018,34 @@ SECTION_TRUST = """
           </td>
           <td><span class="badge badge-green" x-text="p.successful_executions"></span></td>
           <td><span class="badge badge-red" x-text="p.failed_executions"></span></td>
+          <td>
+            <input type="number" :value="p.auto_promote_after||10" min="1" max="100" style="width:70px"
+              @change="updateAutoPromote(p.action_type,parseInt($event.target.value))">
+            <span class="text-xs text-muted" x-show="p.last_promoted_at" x-text="'Last: '+p.last_promoted_at?.substring(0,10)"></span>
+          </td>
           <td><button class="btn btn-blue btn-sm" @click="promoteTrust(p.action_type)">Promote</button></td>
         </tr>
       </template>
     </table>
   </div>
   <div class="card">
-    <h3>Trust Audit Log</h3>
+    <div class="flex-between mb-8">
+      <h3>Trust Audit Log</h3>
+      <button class="btn btn-muted btn-sm" @click="loadTrust()">Refresh</button>
+    </div>
     <table class="tbl">
-      <tr><th>Time</th><th>Action</th><th>Detail</th><th>Level</th><th>Outcome</th></tr>
+      <tr><th>Time</th><th>Action</th><th>Detail</th><th>Level</th><th>Outcome</th><th></th></tr>
       <template x-for="a in trustAudit" :key="a.id">
         <tr>
-          <td class="text-xs" x-text="a.created_at?.substring(0,19)"></td>
+          <td class="mono text-xs" x-text="a.created_at?.substring(0,19)"></td>
           <td x-text="a.action_type"></td>
           <td class="text-xs" x-text="a.action_detail?.substring(0,60)"></td>
           <td><span class="badge badge-blue" x-text="a.trust_level"></span></td>
           <td><span :class="'badge badge-'+(a.outcome==='auto_executed'||a.outcome==='success'?'green':a.outcome==='blocked'?'red':'yellow')" x-text="a.outcome"></span></td>
+          <td>
+            <button class="btn btn-red btn-sm" x-show="a.outcome==='pending_notify'"
+              @click="cancelAudit(a.id)">Cancel</button>
+          </td>
         </tr>
       </template>
     </table>
@@ -974,11 +1066,12 @@ SECTION_COSTS = """
         <div>
           <div class="stat-value" x-text="'$'+(costData.daily_cost_used_cents/100).toFixed(2)+' / $'+(costData.daily_cost_budget_cents/100).toFixed(2)"></div>
           <div class="stat-label">Usage</div>
-          <div class="mt-8" style="background:var(--border);border-radius:4px;height:8px;overflow:hidden">
-            <div style="height:100%;border-radius:4px;transition:width .3s"
-              :style="'width:'+Math.min(100,costData.usage_percent)+'%;background:var(--'+(costData.usage_percent>80?'red':costData.usage_percent>50?'yellow':'green')+')'"></div>
+          <div class="progress-track mt-8">
+            <div class="progress-fill"
+              :style="'width:'+Math.min(100,costData.usage_percent)+'%;background:'+(costData.usage_percent>80?'var(--error)':costData.usage_percent>50?'var(--yellow)':'var(--tertiary-dim)')"></div>
           </div>
-          <div class="text-xs text-muted mt-4" x-text="costData.daily_tokens_used?.toLocaleString()+' / '+costData.daily_tokens_budget?.toLocaleString()+' tokens'"></div>
+          <div class="text-xs text-muted mt-4" style="font-family:'JetBrains Mono',monospace"
+            x-text="costData.daily_tokens_used?.toLocaleString()+' / '+costData.daily_tokens_budget?.toLocaleString()+' tokens'"></div>
         </div>
       </template>
     </div>
@@ -986,11 +1079,17 @@ SECTION_COSTS = """
       <h3>Budget Pressure</h3>
       <template x-if="costData">
         <div>
-          <div class="stat-value" :class="costData.budget_pressure>0.8?'text-red':costData.budget_pressure>0.5?'text-yellow':'text-green'"
+          <div class="stat" :class="costData.budget_pressure>0.8?'text-red':costData.budget_pressure>0.5?'text-yellow':'text-green'"
             x-text="(costData.budget_pressure*100).toFixed(0)+'%'"></div>
           <div class="stat-label" x-text="costData.budget_pressure>0.8?'High \u2014 models may downgrade to Ollama':'Normal'"></div>
         </div>
       </template>
+    </div>
+  </div>
+  <div class="card mb-16">
+    <h3>7-Day Cost History</h3>
+    <div class="chart-container">
+      <canvas id="costHistoryChart"></canvas>
     </div>
   </div>
   <div class="card">
@@ -1000,10 +1099,10 @@ SECTION_COSTS = """
       <template x-for="m in costByModel" :key="m.model">
         <tr>
           <td x-text="m.model"></td>
-          <td x-text="m.calls"></td>
-          <td x-text="m.input_tokens?.toLocaleString()"></td>
-          <td x-text="m.output_tokens?.toLocaleString()"></td>
-          <td x-text="'$'+(m.cost_cents/100).toFixed(3)"></td>
+          <td class="mono" x-text="m.calls"></td>
+          <td class="mono" x-text="m.input_tokens?.toLocaleString()"></td>
+          <td class="mono" x-text="m.output_tokens?.toLocaleString()"></td>
+          <td class="mono" x-text="'$'+(m.cost_cents/100).toFixed(3)"></td>
         </tr>
       </template>
     </table>
@@ -1020,22 +1119,25 @@ SECTION_WORKFLOWS = """
   <p class="text-xs text-muted mb-12">Workflows learned from repeated action patterns. Enable with PROCEDURAL_MEMORY_ENABLED=true.</p>
   <div class="card">
     <table class="tbl">
-      <tr><th>Trigger</th><th>Steps</th><th>Freq</th><th>Confidence</th><th>Auto-suggest</th><th>Last Seen</th></tr>
+      <tr><th>Trigger</th><th>Steps</th><th>Freq</th><th>Confidence</th><th>Auto-suggest</th><th>Last Seen</th><th></th></tr>
       <template x-for="w in workflows" :key="w.id">
         <tr>
           <td x-text="w.trigger_pattern"></td>
-          <td x-text="JSON.parse(w.steps_json||'[]').length"></td>
+          <td class="mono" x-text="JSON.parse(w.steps_json||'[]').length"></td>
           <td><span class="badge badge-blue" x-text="w.frequency"></span></td>
           <td><span :class="'badge badge-'+(w.confidence>=0.7?'green':w.confidence>=0.4?'yellow':'red')" x-text="(w.confidence*100).toFixed(0)+'%'"></span></td>
           <td>
             <button class="btn btn-sm" :class="w.auto_suggest?'btn-green':'btn-default'"
               @click="toggleWorkflow(w.id,!w.auto_suggest)" x-text="w.auto_suggest?'On':'Off'"></button>
           </td>
-          <td class="text-xs" x-text="w.last_observed?.substring(0,10)"></td>
+          <td class="mono text-xs" x-text="w.last_observed?.substring(0,10)"></td>
+          <td>
+            <button class="btn btn-red btn-sm" @click="deleteWorkflow(w.id)">Delete</button>
+          </td>
         </tr>
       </template>
       <template x-if="!workflows?.length">
-        <tr><td colspan="6" class="text-muted text-center">No workflows learned yet</td></tr>
+        <tr><td colspan="7" class="text-muted text-center">No workflows learned yet</td></tr>
       </template>
     </table>
   </div>
@@ -1051,29 +1153,35 @@ SECTION_AGENTS = """
   <div class="grid">
     <template x-for="a in agentList" :key="a.name">
       <div class="card">
-        <h3 x-text="a.name"></h3>
-        <p class="text-xs text-muted" x-text="a.description"></p>
+        <h3 x-text="a.name" style="text-transform:none;font-size:0.875rem;color:var(--on-surface)"></h3>
+        <p class="text-xs text-muted mt-4" x-text="a.description"></p>
+        <div class="mt-8 flex gap-8" x-show="a.tools?.length">
+          <template x-for="t in (a.tools||[])" :key="t">
+            <span class="badge badge-blue" x-text="t"></span>
+          </template>
+        </div>
       </div>
     </template>
     <template x-if="!agentList?.length">
       <div class="card"><p class="text-muted">No agents registered. Enable with AGENT_ORCHESTRATOR_ENABLED=true.</p></div>
     </template>
   </div>
-  <div class="card mt-12">
+  <div class="card mt-16">
     <h3>Recent Executions</h3>
     <table class="tbl">
-      <tr><th>Time</th><th>Agent</th><th>Task</th><th>Status</th><th>Tokens</th></tr>
-      <template x-for="e in agentHistory" :key="e.id">
+      <tr><th>Time</th><th>Agent</th><th>Task</th><th>Status</th><th>Tokens</th><th>Est. Cost</th></tr>
+      <template x-for="e in agentHistory" :key="e.id||e.timestamp">
         <tr>
-          <td class="text-xs" x-text="e.timestamp?.substring(0,19)"></td>
+          <td class="mono text-xs" x-text="e.timestamp?.substring(0,19)"></td>
           <td x-text="e.agent"></td>
           <td class="text-xs" x-text="e.task?.substring(0,80)"></td>
           <td><span :class="'badge badge-'+(e.status==='completed'?'green':'red')" x-text="e.status"></span></td>
-          <td x-text="e.tokens?.toLocaleString()"></td>
+          <td class="mono" x-text="e.tokens?.toLocaleString()"></td>
+          <td class="mono" x-text="e.cost_cents!=null?'$'+(e.cost_cents/100).toFixed(3):estimateAgentCost(e.tokens)"></td>
         </tr>
       </template>
       <template x-if="!agentHistory?.length">
-        <tr><td colspan="5" class="text-muted text-center">No agent executions yet</td></tr>
+        <tr><td colspan="6" class="text-muted text-center">No agent executions yet</td></tr>
       </template>
     </table>
   </div>
@@ -1347,7 +1455,7 @@ function adminApp(){return{
   trustPolicies:[],trustAudit:[],
 
   // --- Costs (v10) ---
-  costData:null,costByModel:[],
+  costData:null,costByModel:[],costHistory:[],costHistoryChart:null,
 
   // --- Workflows (v10) ---
   workflows:[],
@@ -1603,22 +1711,53 @@ function adminApp(){return{
     try{await this.api('/trust/policies/'+type,{method:'POST',body:{trust_level:level}});await this.loadTrust()}catch(e){alert('Error: '+e.message)}},
   async promoteTrust(type){
     try{await this.api('/trust/promote/'+type,{method:'POST',body:{}});await this.loadTrust()}catch(e){alert('Error: '+e.message)}},
+  async updateAutoPromote(type,threshold){
+    try{await this.api('/trust/policies/'+type,{method:'POST',body:{auto_promote_after:threshold}});await this.loadTrust()}catch(e){alert('Error: '+e.message)}},
+  async cancelAudit(id){
+    if(!confirm('Cancel this pending action?'))return;
+    try{await this.api('/trust/cancel/'+id,{method:'POST',body:{}});await this.loadTrust()}catch(e){alert('Error: '+e.message)}},
 
   // === Costs (v10) ===
   async loadCosts(){
-    try{const[b,r]=await Promise.all([this.api('/budget/status'),this.api('/budget/daily-report')]);
-      this.costData=b;this.costByModel=r.by_model||[]}catch(e){console.error('loadCosts:',e)}},
+    try{const[b,r,h]=await Promise.all([this.api('/budget/status'),this.api('/budget/daily-report'),this.api('/budget/history')]);
+      this.costData=b;this.costByModel=r.by_model||[];
+      this.costHistory=Array.isArray(h)?h:(h.days||h.history||[]);
+      this.$nextTick(()=>this.updateCostHistoryChart());
+    }catch(e){console.error('loadCosts:',e)}},
+  updateCostHistoryChart(){
+    const ctx=document.getElementById('costHistoryChart');
+    if(!ctx||!this.costHistory.length)return;
+    if(this.costHistoryChart)this.costHistoryChart.destroy();
+    const labels=this.costHistory.map(d=>d.date||d.day||'');
+    const costs=this.costHistory.map(d=>(d.cost_cents||d.total_cost_cents||0)/100);
+    const tokens=this.costHistory.map(d=>d.total_tokens||d.tokens||0);
+    this.costHistoryChart=new Chart(ctx,{type:'bar',data:{labels,datasets:[
+      {label:'Cost ($)',data:costs,backgroundColor:'rgba(138,76,252,.6)',borderRadius:4,yAxisID:'y'},
+      {label:'Tokens',data:tokens,backgroundColor:'rgba(83,221,252,.3)',borderRadius:4,yAxisID:'y1'}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#a3aac4',font:{family:'Space Grotesk'}}}},
+      scales:{x:{ticks:{color:'#a3aac4',font:{family:'JetBrains Mono',size:10}},grid:{color:'rgba(64,72,93,.1)'}},
+      y:{position:'left',ticks:{color:'#a3aac4',callback:v=>'$'+v},grid:{color:'rgba(64,72,93,.1)'}},
+      y1:{position:'right',ticks:{color:'#a3aac4',callback:v=>v>=1000?(v/1000)+'k':v},grid:{drawOnChartArea:false}}}}});
+  },
 
   // === Workflows (v10) ===
   async loadWorkflows(){
     try{const d=await this.api('/workflows');this.workflows=d.workflows||[]}catch(e){console.error('loadWorkflows:',e)}},
   async toggleWorkflow(id,enabled){
     try{await this.api('/workflows/'+id+'/toggle',{method:'POST',body:{auto_suggest:enabled}});await this.loadWorkflows()}catch(e){alert('Error: '+e.message)}},
+  async deleteWorkflow(id){
+    if(!confirm('Delete this workflow?'))return;
+    try{await this.api('/workflows/'+id,{method:'DELETE'});await this.loadWorkflows()}catch(e){alert('Error: '+e.message)}},
 
   // === Agents (v10) ===
   async loadAgents(){
     try{const[s,h]=await Promise.all([this.api('/agent/status'),this.api('/agent/history')]);
-      this.agentList=s.agents||[];this.agentHistory=h.executions||[]}catch(e){console.error('loadAgents:',e)}}
+      this.agentList=s.agents||[];this.agentHistory=h.executions||[]}catch(e){console.error('loadAgents:',e)}},
+  estimateAgentCost(tokens){
+    if(!tokens)return'\u2014';
+    const cost=(tokens/1000)*0.003;
+    return'~$'+cost.toFixed(3);
+  }
 }}
 
 function schedulerSection(){
@@ -1764,18 +1903,16 @@ MOBILE_CSS = """
 }
 .message-bubble.user {
   align-self: flex-end;
-  background: #1a1a2e;
-  border: 1px solid var(--blue);
+  background: var(--gradient-cta);
   border-radius: 18px 18px 4px 18px;
-  color: var(--text);
+  color: #fff;
   margin-left: auto;
 }
 .message-bubble.assistant {
   align-self: flex-start;
-  background: #16213e;
-  border: 1px solid var(--border);
+  background: var(--surface-container);
   border-radius: 18px 18px 18px 4px;
-  color: var(--text);
+  color: var(--on-surface);
 }
 
 /* Typing indicator */
@@ -2201,6 +2338,8 @@ if ('serviceWorker' in navigator) {
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>nanobot admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 {pwa_head}
