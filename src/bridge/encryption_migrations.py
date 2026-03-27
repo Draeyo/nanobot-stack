@@ -254,6 +254,7 @@ def run_rotation_migration(
         for collection, fields in QDRANT_TARGETS:
             for field in fields:
                 processed = 0
+                failed = 0
                 offset = None
                 while True:
                     try:
@@ -263,7 +264,6 @@ def run_rotation_migration(
                         )
                     except Exception:  # pylint: disable=broad-except
                         break
-                    failed = 0
                     for point in results:
                         payload = dict(point.payload or {})
                         val = payload.get(field)
