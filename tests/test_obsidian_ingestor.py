@@ -193,7 +193,7 @@ class TestIngestVault:
         ingestor = _make_ingestor(monkeypatch, vault_path=str(vault))
         ingestor._enabled = True
         call_count = 0
-        async def mock_ingest_file(path, **kwargs):
+        def mock_ingest_file(path, **kwargs):
             nonlocal call_count
             call_count += 1
             result = MagicMock()
@@ -210,7 +210,7 @@ class TestIngestVault:
         vault = self._make_vault(tmp_path)
         ingestor = _make_ingestor(monkeypatch, vault_path=str(vault))
         ingestor._enabled = True
-        async def mock_ingest_file(path, **kwargs):
+        def mock_ingest_file(path, **kwargs):
             result = MagicMock()
             result.status = "indexed"
             result.doc_id = str(uuid.uuid4())
@@ -239,7 +239,7 @@ class TestIngestVault:
         ingestor = _make_ingestor(monkeypatch, vault_path=str(vault))
         ingestor._enabled = True
         call_count = 0
-        async def mock_ingest_file(path, **kwargs):
+        def mock_ingest_file(path, **kwargs):
             nonlocal call_count
             call_count += 1
             r = MagicMock(); r.status = "indexed"; r.doc_id = str(uuid.uuid4())
@@ -258,7 +258,7 @@ class TestIngestVault:
         ingestor = _make_ingestor(monkeypatch, vault_path=str(vault))
         ingestor._enabled = True
         call_count = 0
-        async def mock_ingest_file(path, **kwargs):
+        def mock_ingest_file(path, **kwargs):
             nonlocal call_count
             call_count += 1
             if call_count == 2:

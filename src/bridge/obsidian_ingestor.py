@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import logging
 import os
 import pathlib
@@ -75,7 +76,7 @@ class ObsidianIngestor(LocalDocIngestor):
             seen.setdefault(normalized, None)
         return list(seen.keys())
 
-    async def ingest_file(
+    def ingest_file(  # type: ignore[override]
         self, file_path: str | pathlib.Path, **kwargs: Any
     ) -> IngestResult:
         """Override: ingest a single Obsidian .md file with frontmatter metadata."""
@@ -103,15 +104,11 @@ class ObsidianIngestor(LocalDocIngestor):
         }
         kwargs["extra_metadata"] = extra_metadata
 
-        # NOTE: LocalDocIngestor.ingest_file is synchronous; run in a thread to avoid blocking.
-        # In the rare race condition where the file is modified between the frontmatter read
-        # above and the actual ingest, metadata may diverge — acceptable for vault sync patterns.
-        result_dict = await asyncio.get_running_loop().run_in_executor(
-            None, super().ingest_file, str(file_path)
-        )
-        result = IngestResult(**{k: v for k, v in result_dict.items() if k in IngestResult.__dataclass_fields__})
+        result_dict = super().ingest_file(str(file_path))
+        valid_fields = {f.name for f in dataclasses.fields(IngestResult)}
+        result = IngestResult(**{k: v for k, v in result_dict.items() if k in valid_fields})
 
-        if getattr(result, "status", None) in ("indexed", "updated") and getattr(result, "doc_id", None):
+        if result.status in ("indexed", "updated") and result.doc_id:
             self._update_obsidian_index(result.doc_id, str(file_path), wikilinks)
 
         return result
@@ -156,10 +153,11 @@ class ObsidianIngestor(LocalDocIngestor):
         errors = 0
         total_files = 0
 
+        loop = asyncio.get_running_loop()
         for md_file in self._vault_path.rglob("*.md"):
             total_files += 1
             try:
-                result = await self.ingest_file(md_file)
+                result = await loop.run_in_executor(None, self.ingest_file, md_file)
                 status = getattr(result, "status", "skipped")
                 if status == "indexed":
                     indexed += 1
