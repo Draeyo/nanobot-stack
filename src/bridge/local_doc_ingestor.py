@@ -126,13 +126,20 @@ class LocalDocIngestor:
         finally:
             db.close()
 
-    def _assert_within_watch_path(self, file_path: str) -> None:
-        resolved = pathlib.Path(file_path).resolve()
-        watch_resolved = pathlib.Path(self._watch_path).resolve()
-        if not resolved.is_relative_to(watch_resolved):
+    def _resolve_safe_path(self, file_path: str) -> str:
+        """Validate and return the real absolute path within the watch directory.
+
+        Uses os.path.realpath to resolve symlinks, then checks the resolved path
+        starts with the watch directory (with trailing separator to prevent
+        prefix attacks). Returns the sanitized real path string.
+        """
+        real = os.path.realpath(file_path)
+        watch_real = os.path.realpath(self._watch_path)
+        if not (real == watch_real or real.startswith(watch_real + os.sep)):
             raise PermissionError(
-                f"Path '{resolved}' is outside the allowed watch path '{self._watch_path}'"
+                f"Path '{real}' is outside the allowed watch path '{self._watch_path}'"
             )
+        return real
 
     # ------------------------------------------------------------------
     # Text extraction
@@ -407,44 +414,44 @@ class LocalDocIngestor:
     def ingest_file(self, file_path: str) -> dict:
         if not self._enabled:
             return IngestResult(status="disabled").as_dict()
-        self._assert_within_watch_path(file_path)
+        safe = self._resolve_safe_path(file_path)
 
         # File size guard
-        size = pathlib.Path(file_path).stat().st_size
+        size = pathlib.Path(safe).stat().st_size
         if size > MAX_FILE_BYTES:
             msg = f"File too large: {size} bytes (max {MAX_FILE_BYTES})"
-            self._log_error(file_path, msg)
-            return IngestResult(status="error", file_path=file_path, error_message=msg).as_dict()
+            self._log_error(safe, msg)
+            return IngestResult(status="error", file_path=safe, error_message=msg).as_dict()
 
-        fmt = self._detect_format(file_path)
+        fmt = self._detect_format(safe)
         if fmt is None or fmt not in self._formats:
-            return IngestResult(status="skipped", file_path=file_path, reason="unsupported_format").as_dict()
+            return IngestResult(status="skipped", file_path=safe, reason="unsupported_format").as_dict()
 
-        file_hash = self._hash_file(file_path)
-        if self._is_already_indexed(file_path, file_hash):
-            self._update_log_skipped(file_path)
-            return IngestResult(status="skipped", file_path=file_path, reason="same_hash").as_dict()
+        file_hash = self._hash_file(safe)
+        if self._is_already_indexed(safe, file_hash):
+            self._update_log_skipped(safe)
+            return IngestResult(status="skipped", file_path=safe, reason="same_hash").as_dict()
 
         # Check for modified file (different hash but known path)
-        existing_doc_id = self._get_existing_doc_id(file_path)
+        existing_doc_id = self._get_existing_doc_id(safe)
         if existing_doc_id:
             self._delete_qdrant_chunks(existing_doc_id)
 
         try:
-            text = self._extract_text(file_path, fmt)
+            text = self._extract_text(safe, fmt)
         except Exception as exc:
             msg = f"Extraction error: {exc}"
-            logger.exception("extract_text failed for %s", file_path)
-            self._log_error(file_path, msg)
-            return IngestResult(status="error", file_path=file_path, error_message=msg).as_dict()
+            logger.exception("extract_text failed for %s", safe)
+            self._log_error(safe, msg)
+            return IngestResult(status="error", file_path=safe, error_message=msg).as_dict()
 
-        meta = self._extract_metadata(file_path)
+        meta = self._extract_metadata(safe)
         chunks = self._chunk_text(text, meta["title"])
 
         doc_id = existing_doc_id or str(uuid.uuid4())
         metadata = {
             "doc_id": doc_id,
-            "source_path": str(pathlib.Path(file_path).resolve()),
+            "source_path": safe,
             "file_type": fmt,
             "file_hash": file_hash,
             "title": meta["title"],
@@ -453,11 +460,11 @@ class LocalDocIngestor:
         }
         self._embed_and_upsert(chunks, metadata)
 
-        self._upsert_log(doc_id, file_path, file_hash, fmt, len(chunks), "indexed")
+        self._upsert_log(doc_id, safe, file_hash, fmt, len(chunks), "indexed")
         return IngestResult(
             status="indexed",
             doc_id=doc_id,
-            file_path=file_path,
+            file_path=safe,
             file_type=fmt,
             chunks_count=len(chunks),
             title=meta["title"],
