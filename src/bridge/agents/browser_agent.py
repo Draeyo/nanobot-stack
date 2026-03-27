@@ -95,14 +95,19 @@ def seed_default_trust_policies() -> None:
         te.set_trust_level("browser_read", "notify_then_execute")
         te.set_trust_level("browser_fill", "approval_required")
         te.set_trust_level("browser_submit", "approval_required")
-        # browser_submit must NEVER be auto-promoted (auto_promote_after=0).
         # set_trust_level() does not expose auto_promote_after, so we write it directly.
+        # browser_submit must NEVER be auto-promoted (0); browser_read/fill promote at 20.
         db = sqlite3.connect(str(te.TRUST_DB_PATH))
         try:
-            db.execute(
-                "UPDATE trust_policies SET auto_promote_after=? WHERE action_type=?",
-                (0, "browser_submit"),
-            )
+            for action_type, threshold in (
+                ("browser_read", 20),
+                ("browser_fill", 20),
+                ("browser_submit", 0),
+            ):
+                db.execute(
+                    "UPDATE trust_policies SET auto_promote_after=? WHERE action_type=?",
+                    (threshold, action_type),
+                )
             db.commit()
         finally:
             db.close()

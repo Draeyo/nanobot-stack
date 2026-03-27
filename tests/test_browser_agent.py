@@ -585,5 +585,7 @@ def test_browser_agent_default_trust_policies():
     assert submit_level == "approval_required"
     assert read_level == "notify_then_execute"
     assert fill_level == "approval_required"
-    # browser_submit must NEVER be auto-promoted
+    # verify all three auto_promote_after values are deterministically set
+    assert all_policies["browser_read"]["auto_promote_after"] == 20
+    assert all_policies["browser_fill"]["auto_promote_after"] == 20
     assert all_policies["browser_submit"]["auto_promote_after"] == 0
