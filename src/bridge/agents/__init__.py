@@ -49,6 +49,12 @@ def _register_defaults() -> None:
         register_agent("ops", OpsAgent)
     except ImportError:
         pass
+    try:
+        from .browser_agent import BrowserAgent  # noqa: WPS433
+
+        register_agent("browser", BrowserAgent)
+    except ImportError:
+        pass
 
 
 _register_defaults()

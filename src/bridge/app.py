@@ -53,6 +53,7 @@ from scheduler_api import router as scheduler_router, init_scheduler_api
 from push_api import router as push_router, init_push_api
 from scheduler_registry import JobRegistry
 from memory_api import memory_router, feedback_router, init_memory_api
+from browser_api import router as browser_router, init_browser_api
 
 load_dotenv()
 
@@ -1557,3 +1558,17 @@ try:
     logger.info("Dev integrations endpoints mounted (/api/dev/*)")
 except Exception as exc:
     logger.info("Dev integrations API not loaded: %s", exc)
+
+# Sub-K: Browser automation
+try:
+    if os.getenv("BROWSER_ENABLED", "false").lower() == "true":
+        from agents.browser_agent import BrowserAgent as _BrowserAgentCls  # pylint: disable=ungrouped-imports
+        _browser_agent_instance = _BrowserAgentCls(run_chat_fn=run_chat_task)
+        init_browser_api(browser_agent=_browser_agent_instance, verify_token_dep=verify_token)
+        logger.info("Browser automation enabled — BrowserAgent initialised")
+    else:
+        init_browser_api(browser_agent=None, verify_token_dep=verify_token)
+        logger.info("Browser automation disabled (BROWSER_ENABLED=false)")
+    app.include_router(browser_router)
+except Exception as _browser_exc:
+    logger.info("Browser API not loaded: %s", _browser_exc)
