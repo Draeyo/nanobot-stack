@@ -128,7 +128,8 @@ class LocalDocIngestor:
 
     def _assert_within_watch_path(self, file_path: str) -> None:
         resolved = pathlib.Path(file_path).resolve()
-        if not str(resolved).startswith(str(self._watch_path)):
+        watch_resolved = pathlib.Path(self._watch_path).resolve()
+        if not resolved.is_relative_to(watch_resolved):
             raise PermissionError(
                 f"Path '{resolved}' is outside the allowed watch path '{self._watch_path}'"
             )

@@ -719,7 +719,7 @@ class TestSearchPipeline:
 
         assert "[1]" in ctx
         assert "Title One" in ctx
-        assert "https://one.com" in ctx
+        assert ctx.find("https://one.com") >= 0
         assert "[2]" in ctx
 
     @pytest.mark.asyncio

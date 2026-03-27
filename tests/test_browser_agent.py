@@ -64,8 +64,7 @@ def test_browser_agent_env_loading(monkeypatch):
     BrowserAgent = _import_browser_agent()
     agent = BrowserAgent(run_chat_fn=lambda *a, **k: {"text": "[]"})
     assert agent.browser_enabled is True
-    assert "github.com" in agent.allowed_domains
-    assert "docs.python.org" in agent.allowed_domains
+    assert {"github.com", "docs.python.org"}.issubset(agent.allowed_domains)
     assert agent.page_timeout_ms == 15000
     assert agent.max_session_s == 120
     assert agent.screenshot_store is True
