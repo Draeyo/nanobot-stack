@@ -574,6 +574,8 @@ def test_browser_agent_default_trust_policies():
             submit_level = trust_engine.get_trust_level("browser_submit")
             read_level = trust_engine.get_trust_level("browser_read")
             fill_level = trust_engine.get_trust_level("browser_fill")
+            # Capture policies while the temp DB is still alive
+            all_policies = {p["action_type"]: p for p in trust_engine.get_policies()}
         finally:
             for k, v in original.items():
                 if v is None:
@@ -583,3 +585,5 @@ def test_browser_agent_default_trust_policies():
     assert submit_level == "approval_required"
     assert read_level == "notify_then_execute"
     assert fill_level == "approval_required"
+    # browser_submit must NEVER be auto-promoted
+    assert all_policies["browser_submit"]["auto_promote_after"] == 0
