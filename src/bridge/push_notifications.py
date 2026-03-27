@@ -30,7 +30,9 @@ class PushNotificationManager:
             logger.warning(
                 "VAPID keys auto-generated. Persist these in stack.env to avoid "
                 "invalidating existing push subscriptions on restart:\n"
-                "  PUSH_VAPID_PUBLIC_KEY=%s\n  PUSH_VAPID_PRIVATE_KEY=%s",
+                "  PUSH_VAPID_PUBLIC_KEY=%s\n  PUSH_VAPID_PRIVATE_KEY=%s\n"
+                "WARNING: key material above is sensitive — provision via stack.env "
+                "before first start if logs are shipped to an external aggregator.",
                 pub,
                 priv,
             )
@@ -219,18 +221,3 @@ class PushNotificationManager:
             "send_to_all: sent=%d failed=%d expired_cleaned=%d", sent, failed, expired_cleaned
         )
         return {"sent": sent, "failed": failed, "expired_cleaned": expired_cleaned}
-
-    def _cleanup_expired(self, expired_ids: list[str]) -> int:
-        """Delete a list of expired subscription ids. Returns count deleted."""
-        if not expired_ids:
-            return 0
-        db = self._get_db()
-        try:
-            placeholders = ",".join("?" * len(expired_ids))
-            cursor = db.execute(
-                f"DELETE FROM push_subscriptions WHERE id IN ({placeholders})", expired_ids
-            )
-            db.commit()
-            return cursor.rowcount
-        finally:
-            db.close()

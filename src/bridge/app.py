@@ -30,6 +30,7 @@ from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
 from litellm import completion as litellm_completion
 from litellm import embedding as litellm_embedding
 from pydantic import BaseModel, Field
@@ -148,8 +149,7 @@ token_tracker = TokenTracker()
 # ---------------------------------------------------------------------------
 app = FastAPI(title="nanobot-rag-bridge-v9")
 
-# Static files for PWA assets (manifest, sw.js, mobile.css, icons)
-from fastapi.staticfiles import StaticFiles  # pylint: disable=ungrouped-imports
+# Static files for PWA assets (manifest, sw.js, icons)
 _static_dir = pathlib.Path(__file__).parent / "static"
 _static_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
@@ -1524,7 +1524,7 @@ try:
     _voice_processor = VoiceProcessor()
 
     # Wire the existing chat handler so voice_chat can call the full pipeline.
-    async def _voice_handle_chat(message: str, session_id: str, source: str) -> str:
+    async def _voice_handle_chat(message: str, _session_id: str, _source: str) -> str:
         result = run_chat_task(
             task_type="fallback_general",
             messages=[{"role": "user", "content": message}],

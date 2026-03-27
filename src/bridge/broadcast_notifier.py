@@ -16,10 +16,13 @@ class BroadcastNotifier:
 
     Args:
         channel_manager: The ChannelManager instance from channels/__init__.py.
+        push_manager: Optional PushNotificationManager singleton. When provided,
+            webpush delivery reuses it instead of creating a new instance.
     """
 
-    def __init__(self, channel_manager: Any) -> None:
+    def __init__(self, channel_manager: Any, push_manager: Any = None) -> None:
         self._channel_manager = channel_manager
+        self._push_manager = push_manager
 
     async def broadcast(self, channels: list[str], message: str) -> dict[str, bool]:
         """Send message to each channel. Returns {channel: success}."""
@@ -54,9 +57,10 @@ class BroadcastNotifier:
             logger.debug("webpush channel skipped: PUSH_ENABLED=false")
             return False
         try:
-            from push_notifications import PushNotificationManager  # pylint: disable=import-outside-toplevel
-            mgr = PushNotificationManager()
-            result = mgr.send_to_all(title="Nanobot", body=message, url="/")
+            if self._push_manager is None:
+                from push_notifications import PushNotificationManager  # pylint: disable=import-outside-toplevel
+                self._push_manager = PushNotificationManager()
+            result = self._push_manager.send_to_all(title="Nanobot", body=message, url="/")
             return result.get("sent", 0) > 0 or result.get("failed", 0) == 0
         except Exception:
             logger.exception("webpush delivery failed")

@@ -6,7 +6,6 @@ const CACHE_NAME = "nanobot-v1";
 const PRECACHE_URLS = [
   "/",
   "/static/manifest.json",
-  "/static/mobile.css",
   "/static/icons/icon-192.png",
   "/static/icons/icon-512.png",
 ];
