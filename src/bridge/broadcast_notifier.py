@@ -3,11 +3,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from typing import Any
 
 logger = logging.getLogger("rag-bridge.broadcast_notifier")
 
-VALID_CHANNELS = frozenset({"ntfy", "telegram", "discord", "whatsapp"})
+VALID_CHANNELS = frozenset({"ntfy", "telegram", "discord", "whatsapp", "webpush"})
 
 
 class BroadcastNotifier:
@@ -34,6 +35,8 @@ class BroadcastNotifier:
     async def _deliver(self, channel: str, message: str) -> bool:
         if channel == "ntfy":
             return await self._deliver_ntfy(message)
+        if channel == "webpush":
+            return await self._deliver_webpush(message)
         return await self._deliver_adapter(channel, message)
 
     async def _deliver_ntfy(self, message: str) -> bool:
@@ -43,6 +46,20 @@ class BroadcastNotifier:
             return bool(result.get("ok"))
         except Exception:
             logger.exception("ntfy delivery failed")
+            return False
+
+    async def _deliver_webpush(self, message: str) -> bool:
+        push_enabled = os.getenv("PUSH_ENABLED", "false").lower() == "true"
+        if not push_enabled:
+            logger.debug("webpush channel skipped: PUSH_ENABLED=false")
+            return False
+        try:
+            from push_notifications import PushNotificationManager  # pylint: disable=import-outside-toplevel
+            mgr = PushNotificationManager()
+            result = mgr.send_to_all(title="Nanobot", body=message, url="/")
+            return result.get("sent", 0) > 0 or result.get("failed", 0) == 0
+        except Exception:
+            logger.exception("webpush delivery failed")
             return False
 
     async def _deliver_adapter(self, platform: str, message: str) -> bool:

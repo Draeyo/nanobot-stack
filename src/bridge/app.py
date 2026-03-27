@@ -49,6 +49,7 @@ from token_optimizer import (
 from broadcast_notifier import BroadcastNotifier
 from scheduler import SchedulerManager
 from scheduler_api import router as scheduler_router, init_scheduler_api
+from push_api import router as push_router, init_push_api
 from scheduler_registry import JobRegistry
 from memory_api import memory_router, feedback_router, init_memory_api
 
@@ -146,6 +147,12 @@ token_tracker = TokenTracker()
 # FastAPI app with middlewares
 # ---------------------------------------------------------------------------
 app = FastAPI(title="nanobot-rag-bridge-v9")
+
+# Static files for PWA assets (manifest, sw.js, mobile.css, icons)
+from fastapi.staticfiles import StaticFiles  # pylint: disable=ungrouped-imports
+_static_dir = pathlib.Path(__file__).parent / "static"
+_static_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 # Prometheus metrics
 try:
@@ -1336,6 +1343,19 @@ scheduler_manager = SchedulerManager(
 )
 init_scheduler_api(manager=scheduler_manager, verify_token_dep=verify_token)
 app.include_router(scheduler_router)
+
+# ---------------------------------------------------------------------------
+# Push notifications (conditional on PUSH_ENABLED)
+# ---------------------------------------------------------------------------
+_push_enabled = os.getenv("PUSH_ENABLED", "false").lower() == "true"
+if _push_enabled:
+    from push_notifications import PushNotificationManager  # pylint: disable=ungrouped-imports
+    _push_mgr = PushNotificationManager()
+    init_push_api(_push_mgr)
+    logger.info("Push notifications enabled (VAPID public key: %s...)", _push_mgr.vapid_public_key[:16])
+else:
+    init_push_api(None)
+app.include_router(push_router)
 
 # Sub-projet H: memory decay + feedback loop
 try:

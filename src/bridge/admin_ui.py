@@ -8,6 +8,7 @@ from __future__ import annotations
 import os
 
 ADMIN_ENABLED = os.getenv("ADMIN_UI_ENABLED", "true").lower() == "true"
+PWA_ENABLED = os.getenv("PWA_ENABLED", "true").lower() == "true"
 
 # ---------------------------------------------------------------------------
 # CSS
@@ -1704,17 +1705,506 @@ function schedulerSection(){
 """
 
 # ---------------------------------------------------------------------------
+# Mobile PWA CSS
+# ---------------------------------------------------------------------------
+MOBILE_CSS = """
+/* ===== Mobile PWA View (< 768px) ===== */
+@media (max-width: 767px) {
+  .topnav { display: none !important; }
+  main { display: none !important; }
+  #mobile-chat-view { display: flex !important; }
+}
+@media (min-width: 768px) {
+  #mobile-chat-view { display: none !important; }
+}
+
+/* Mobile chat layout */
+#mobile-chat-view {
+  display: none;
+  flex-direction: column;
+  height: 100dvh;
+  height: 100vh;
+  background: var(--bg);
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+}
+
+/* Mobile header */
+.mobile-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mobile-header .brand { font-weight: 700; font-size: 16px; color: var(--cyan); }
+.mobile-header-actions { display: flex; gap: 8px; }
+
+/* Message list */
+.mobile-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Message bubbles */
+.message-bubble {
+  max-width: 80%;
+  padding: 10px 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  word-wrap: break-word;
+}
+.message-bubble.user {
+  align-self: flex-end;
+  background: #1a1a2e;
+  border: 1px solid var(--blue);
+  border-radius: 18px 18px 4px 18px;
+  color: var(--text);
+  margin-left: auto;
+}
+.message-bubble.assistant {
+  align-self: flex-start;
+  background: #16213e;
+  border: 1px solid var(--border);
+  border-radius: 18px 18px 18px 4px;
+  color: var(--text);
+}
+
+/* Typing indicator */
+.typing-indicator { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
+.typing-indicator span {
+  width: 6px; height: 6px; background: var(--muted);
+  border-radius: 50%; animation: typing-bounce 1.2s infinite;
+}
+.typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+.typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-6px); }
+}
+
+/* Quick actions */
+.mobile-quick-actions {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  overflow-x: auto;
+  flex-shrink: 0;
+  border-top: 1px solid var(--border);
+}
+.mobile-quick-actions button {
+  white-space: nowrap;
+  flex-shrink: 0;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  color: var(--text);
+  padding: 6px 14px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+/* Input bar */
+.mobile-input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  background: var(--card);
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.mobile-input-bar textarea {
+  flex: 1;
+  min-height: 40px;
+  max-height: 120px;
+  resize: none;
+  border-radius: 20px;
+  padding: 10px 14px;
+  font-size: 14px;
+  overflow-y: auto;
+}
+.mobile-input-bar .btn-send {
+  height: 40px;
+  width: 40px;
+  border-radius: 50%;
+  background: var(--blue);
+  border: none;
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.mobile-input-bar .btn-mic {
+  height: 40px;
+  width: 40px;
+  border-radius: 50%;
+  background: var(--border);
+  border: none;
+  color: var(--text);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.mobile-input-bar .btn-mic.recording {
+  background: var(--red);
+  animation: recording-pulse 1s infinite;
+}
+@keyframes recording-pulse {
+  0%, 100% { opacity: 1; } 50% { opacity: 0.5; }
+}
+
+/* Install banner */
+.install-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--card);
+  border-bottom: 1px solid var(--blue);
+  font-size: 13px;
+  flex-shrink: 0;
+}
+.install-banner span { flex: 1; }
+.install-banner button {
+  background: var(--blue);
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.install-banner .btn-dismiss {
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+}
+"""
+
+# ---------------------------------------------------------------------------
+# Mobile Chat HTML
+# ---------------------------------------------------------------------------
+MOBILE_CHAT_HTML = """
+<div id="mobile-chat-view"
+     x-data="mobileChatApp()"
+     x-init="init()">
+
+  <!-- Install banner (Chrome Android A2HS) -->
+  <div x-show="showInstallBanner" class="install-banner">
+    <span>Installer Nanobot sur l'ecran d'accueil</span>
+    <button @click="installApp()">Installer</button>
+    <button class="btn-dismiss" @click="showInstallBanner = false">X</button>
+  </div>
+
+  <!-- Header -->
+  <div class="mobile-header">
+    <span class="brand">Nanobot</span>
+    <div class="mobile-header-actions">
+      <button class="btn btn-muted btn-sm" @click="newConversation()">+ Nouveau</button>
+      <template x-if="pushEnabled">
+        <button class="btn btn-sm"
+                :class="pushSubscribed ? 'btn-blue' : 'btn-muted'"
+                @click="pushSubscribed ? unsubscribePush() : subscribePush()"
+                :title="pushSubscribed ? 'Desactiver les notifications' : 'Activer les notifications'">
+          Bell
+        </button>
+      </template>
+    </div>
+  </div>
+
+  <!-- Messages -->
+  <div class="mobile-messages" x-ref="messagesContainer">
+    <template x-for="msg in messages" :key="msg.ts">
+      <div class="message-bubble" :class="msg.role">
+        <template x-if="msg.streaming && msg.content === ''">
+          <div class="typing-indicator">
+            <span></span><span></span><span></span>
+          </div>
+        </template>
+        <template x-if="!(msg.streaming && msg.content === '')">
+          <div x-html="renderMarkdown(msg.content)"></div>
+        </template>
+      </div>
+    </template>
+  </div>
+
+  <!-- Quick actions -->
+  <div class="mobile-quick-actions">
+    <button @click="triggerBriefing()">Briefing maintenant</button>
+  </div>
+
+  <!-- Input bar -->
+  <div class="mobile-input-bar">
+    <textarea x-model="inputText"
+              placeholder="Message..."
+              rows="1"
+              @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
+              @input="autoResize($event.target)"></textarea>
+    <template x-if="voiceEnabled">
+      <button class="btn-mic" :class="{ recording: isRecording }"
+              @click="startVoiceInput()"
+              :title="isRecording ? 'Arreter' : 'Microphone'">
+        Mic
+      </button>
+    </template>
+    <button class="btn-send"
+            @click="sendMessage(); navigator.vibrate && navigator.vibrate(10)"
+            :disabled="isStreaming || !inputText.trim()"
+            title="Envoyer">
+      &gt;
+    </button>
+  </div>
+</div>
+"""
+
+# ---------------------------------------------------------------------------
+# Mobile Chat JS
+# ---------------------------------------------------------------------------
+MOBILE_CHAT_JS = """
+function mobileChatApp() {
+  return {
+    messages: [],
+    inputText: '',
+    isStreaming: false,
+    isRecording: false,
+    showInstallBanner: false,
+    deferredPrompt: null,
+    pushEnabled: false,
+    pushSubscribed: false,
+    voiceEnabled: false,
+
+    async init() {
+      await this.loadHistory();
+      this.checkPushAvailability();
+      this.checkVoiceAvailability();
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        this.deferredPrompt = e;
+        this.showInstallBanner = true;
+      });
+    },
+
+    async loadHistory() {
+      try {
+        const r = await fetch('/api/chat/history?limit=20');
+        if (r.ok) {
+          const data = await r.json();
+          this.messages = (data.messages || []).map(m => ({
+            role: m.role, content: m.content,
+            ts: m.ts || Date.now(), streaming: false
+          }));
+          this.$nextTick(() => this.scrollToBottom());
+        }
+      } catch(e) { console.warn('[Mobile] loadHistory failed', e); }
+    },
+
+    async checkPushAvailability() {
+      try {
+        const r = await fetch('/api/push/vapid-public-key');
+        if (r.ok) {
+          this.pushEnabled = true;
+          await this.checkPushSubscription();
+        }
+      } catch(e) {}
+    },
+
+    async checkVoiceAvailability() {
+      try {
+        const r = await fetch('/api/voice/status');
+        if (r.ok) { const d = await r.json(); this.voiceEnabled = d.enabled === true; }
+      } catch(e) {}
+    },
+
+    async sendMessage() {
+      const text = this.inputText.trim();
+      if (!text || this.isStreaming) return;
+      this.inputText = '';
+      this.messages.push({ role: 'user', content: text, ts: Date.now(), streaming: false });
+      const assistantMsg = { role: 'assistant', content: '', ts: Date.now(), streaming: true };
+      this.messages.push(assistantMsg);
+      this.isStreaming = true;
+      this.$nextTick(() => this.scrollToBottom());
+      try {
+        const es = new EventSource('/api/chat/stream?message=' + encodeURIComponent(text));
+        es.onmessage = (e) => {
+          if (e.data === '[DONE]') { assistantMsg.streaming = false; es.close(); this.isStreaming = false; return; }
+          try { const d = JSON.parse(e.data); assistantMsg.content += d.content || ''; } catch(_) {}
+          this.$nextTick(() => this.scrollToBottom());
+        };
+        es.onerror = () => { es.close(); this.isStreaming = false; assistantMsg.streaming = false; };
+      } catch(e) { this.isStreaming = false; assistantMsg.streaming = false; }
+    },
+
+    async newConversation() {
+      try { await fetch('/api/chat/reset', { method: 'POST' }); } catch(e) {}
+      this.messages = [];
+    },
+
+    async triggerBriefing() {
+      try {
+        await fetch('/api/scheduler/trigger-briefing', { method: 'POST' });
+        this.messages.push({ role: 'assistant', content: 'Briefing declenche.', ts: Date.now(), streaming: false });
+      } catch(e) {}
+    },
+
+    async installApp() {
+      if (!this.deferredPrompt) return;
+      this.deferredPrompt.prompt();
+      await this.deferredPrompt.userChoice;
+      this.showInstallBanner = false;
+      this.deferredPrompt = null;
+    },
+
+    async checkPushSubscription() {
+      try {
+        if (!window._swRegistration) return;
+        const sub = await window._swRegistration.pushManager.getSubscription();
+        this.pushSubscribed = sub !== null;
+      } catch(e) {}
+    },
+
+    async subscribePush() {
+      try {
+        const r = await fetch('/api/push/vapid-public-key');
+        const { vapid_public_key } = await r.json();
+        const appKey = this._urlBase64ToUint8Array(vapid_public_key);
+        const sub = await window._swRegistration.pushManager.subscribe({
+          userVisibleOnly: true, applicationServerKey: appKey
+        });
+        const keys = sub.toJSON().keys;
+        await fetch('/api/push/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ endpoint: sub.endpoint, p256dh: keys.p256dh, auth: keys.auth })
+        });
+        this.pushSubscribed = true;
+      } catch(e) { console.warn('[Mobile] subscribePush failed', e); }
+    },
+
+    async unsubscribePush() {
+      try {
+        const sub = await window._swRegistration.pushManager.getSubscription();
+        if (sub) {
+          await fetch('/api/push/unsubscribe', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ endpoint: sub.endpoint })
+          });
+          await sub.unsubscribe();
+        }
+        this.pushSubscribed = false;
+      } catch(e) { console.warn('[Mobile] unsubscribePush failed', e); }
+    },
+
+    async startVoiceInput() {
+      if (this.isRecording) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream);
+        const chunks = [];
+        this.isRecording = true;
+        recorder.ondataavailable = e => chunks.push(e.data);
+        recorder.onstop = async () => {
+          this.isRecording = false;
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          const fd = new FormData(); fd.append('audio', blob, 'voice.webm');
+          try {
+            const r = await fetch('/api/voice/chat', { method: 'POST', body: fd });
+            if (r.ok) {
+              const d = await r.json();
+              if (d.transcription) this.messages.push({ role: 'user', content: d.transcription, ts: Date.now(), streaming: false });
+              if (d.response) this.messages.push({ role: 'assistant', content: d.response, ts: Date.now(), streaming: false });
+              this.$nextTick(() => this.scrollToBottom());
+            }
+          } catch(e) { console.warn('[Mobile] voice upload failed', e); }
+        };
+        recorder.start();
+        setTimeout(() => { if (recorder.state === 'recording') recorder.stop(); }, 30000);
+        document.querySelector('.btn-mic').addEventListener('click', () => {
+          if (recorder.state === 'recording') recorder.stop();
+        }, { once: true });
+      } catch(e) { this.isRecording = false; console.warn('[Mobile] getUserMedia failed', e); }
+    },
+
+    renderMarkdown(text) {
+      if (typeof marked !== 'undefined') return marked.parse(text || '');
+      return (text || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\\\n/g,'<br>');
+    },
+
+    scrollToBottom() {
+      const el = this.$refs.messagesContainer;
+      if (el) el.scrollTop = el.scrollHeight;
+    },
+
+    autoResize(el) {
+      el.style.height = 'auto';
+      el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+    },
+
+    _urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = atob(base64);
+      return new Uint8Array([...rawData].map(c => c.charCodeAt(0)));
+    },
+  };
+}
+"""
+
+# ---------------------------------------------------------------------------
 # Builder
 # ---------------------------------------------------------------------------
 def build_admin_html() -> str:
     """Assemble the full admin SPA HTML."""
+    pwa_head = ""
+    pwa_script = ""
+    pwa_enabled = os.getenv("PWA_ENABLED", "true").lower() == "true"
+    if pwa_enabled:
+        pwa_head = """
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#1a1a2e">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Nanobot">
+<link rel="apple-touch-icon" href="/static/icons/icon-192.png">"""
+        pwa_script = """
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('/static/sw.js', { scope: '/' });
+      console.log('[Nanobot PWA] Service Worker enregistre', reg.scope);
+      window._swRegistration = reg;
+    } catch (err) {
+      console.warn('[Nanobot PWA] Enregistrement SW echoue', err);
+    }
+  });
+}
+</script>"""
     return f"""<!DOCTYPE html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>nanobot admin</title>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>{ADMIN_CSS}</style>
+{pwa_head}
+<style>{ADMIN_CSS}{MOBILE_CSS}</style>
 </head>
 <body x-data="adminApp()" x-init="init()">
 {ADMIN_NAV}
@@ -1735,5 +2225,8 @@ def build_admin_html() -> str:
 {SECTION_ADVANCED}
 {SECTION_SCHEDULER}
 </main>
+{MOBILE_CHAT_HTML}
 <script>{ADMIN_JS}</script>
+<script>{MOBILE_CHAT_JS}</script>
+{pwa_script}
 </body></html>"""
