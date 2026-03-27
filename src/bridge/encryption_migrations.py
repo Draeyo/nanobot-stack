@@ -263,12 +263,21 @@ def run_rotation_migration(
                         )
                     except Exception:  # pylint: disable=broad-except
                         break
+                    failed = 0
                     for point in results:
                         payload = dict(point.payload or {})
                         val = payload.get(field)
                         if not isinstance(val, str) or not old_encryptor_qdrant.is_encrypted(val):
                             continue
-                        plain = old_encryptor_qdrant.decrypt_field(val)
+                        try:
+                            plain = old_encryptor_qdrant.decrypt_field(val)
+                        except Exception as point_exc:  # pylint: disable=broad-except
+                            logger.warning(
+                                "Skipping undecryptable point %s in %s.%s during rotation: %s",
+                                point.id, collection, field, point_exc,
+                            )
+                            failed += 1
+                            continue
                         payload[field] = new_enc_qdrant.encrypt_field(plain)
                         try:
                             qdrant_client.set_payload(
@@ -279,6 +288,6 @@ def run_rotation_migration(
                             pass
                     if offset is None:
                         break
-                progress["qdrant"][f"{collection}.{field}"] = {"processed": processed}
+                progress["qdrant"][f"{collection}.{field}"] = {"processed": processed, "failed": failed}
 
     return progress
