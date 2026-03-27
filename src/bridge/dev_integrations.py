@@ -250,6 +250,8 @@ class GitHubSyncer:
         """Return configured repos or auto-discover from GitHub API (last 90d, max 50)."""
         if self._repos:
             return self._repos
+        if self._gh is None:
+            return []
         try:
             cutoff = datetime.now(timezone.utc) - timedelta(days=90)
             all_repos = self._gh.get_user(self._username).get_repos(

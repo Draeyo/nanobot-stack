@@ -85,7 +85,7 @@ class ObsidianIngestor(LocalDocIngestor):
         if not str(file_path).endswith(".md"):
             return IngestResult(status="skipped", doc_id="")
 
-        if self._vault_path and not str(resolved).startswith(str(self._vault_path.resolve())):
+        if self._vault_path and not resolved.is_relative_to(self._vault_path.resolve()):
             raise PermissionError(f"Path traversal attempt: {file_path}")
 
         raw_content = resolved.read_text(encoding="utf-8")
@@ -102,6 +102,9 @@ class ObsidianIngestor(LocalDocIngestor):
         }
         kwargs["extra_metadata"] = extra_metadata
 
+        # NOTE: super().ingest_file() re-reads the file from disk. In the rare race condition
+        # where the file is modified between this read and the super call, frontmatter metadata
+        # and Qdrant content may diverge. Acceptable tradeoff given vault sync patterns.
         result = await super().ingest_file(file_path, **kwargs)
 
         if getattr(result, "status", None) in ("indexed", "updated") and getattr(result, "doc_id", None):

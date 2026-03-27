@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel
 
 logger = logging.getLogger("rag-bridge.dev_integrations_api")
@@ -46,7 +46,10 @@ async def trigger_github_sync(body: GitHubSyncRequest) -> dict:
 
 
 @router.get("/github/log")
-async def get_github_log(limit: int = 20, offset: int = 0) -> dict:
+async def get_github_log(
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
     """Return paginated GitHub sync log."""
     if _manager is None:
         raise HTTPException(status_code=503, detail="dev integrations not initialized")
