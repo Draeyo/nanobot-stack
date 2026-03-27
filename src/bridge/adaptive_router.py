@@ -10,6 +10,7 @@ import json
 import logging
 import os
 import pathlib
+import sqlite3
 import threading
 import time
 from typing import Any
@@ -22,6 +23,15 @@ SCORES_PATH = STATE_DIR / "adaptive_scores.json"
 MIN_SAMPLES = int(os.getenv("ADAPTIVE_MIN_SAMPLES", "5"))
 DECAY_FACTOR = float(os.getenv("ADAPTIVE_DECAY_FACTOR", "0.95"))
 PREMIUM_ONLY_TASKS = frozenset({"code_reasoning", "incident_triage"})
+
+_ADJUSTMENT_CACHE: dict[str, tuple[float, float]] = {}  # key -> (adjustment, cache_time)
+_ADJUSTMENT_CACHE_TTL = 300.0  # 5 minutes
+
+
+def _feedback_db_path() -> pathlib.Path:
+    return pathlib.Path(
+        os.getenv("RAG_STATE_DIR", os.getenv("STATE_DIR", "/opt/nanobot-stack/rag-bridge/state"))
+    ) / "feedback.db"
 
 
 class AdaptiveRouter:
@@ -90,6 +100,35 @@ class AdaptiveRouter:
             decay_rounds = int(age_hours / 24)
             entry["avg_score"] = 0.5 + (entry["avg_score"] - 0.5) * (DECAY_FACTOR ** decay_rounds)
 
+    def invalidate_score_cache(self) -> None:
+        """Clear the routing adjustment cache (called after apply_adjustments())."""
+        _ADJUSTMENT_CACHE.clear()
+        logger.debug("Routing adjustment cache invalidated")
+
+    def _get_routing_adjustment(self, task_type: str, model: str) -> float:
+        """Read routing adjustment multiplier from SQLite, with 5-minute TTL cache.
+
+        Returns 1.0 (neutral) if no adjustment row exists or on any error.
+        """
+        cache_key = f"{task_type}|{model}"
+        cached = _ADJUSTMENT_CACHE.get(cache_key)
+        if cached and (time.time() - cached[1]) < _ADJUSTMENT_CACHE_TTL:
+            return cached[0]
+
+        try:
+            db = sqlite3.connect(str(_feedback_db_path()))
+            row = db.execute(
+                "SELECT adjustment FROM routing_adjustments WHERE query_type=? AND model_id=?",
+                (task_type, model),
+            ).fetchone()
+            db.close()
+            adjustment = float(row[0]) if row else 1.0
+        except Exception:
+            adjustment = 1.0
+
+        _ADJUSTMENT_CACHE[cache_key] = (adjustment, time.time())
+        return adjustment
+
     def get_model_ranking(self, task_type: str, candidates: list[str],
                           budget_pressure: float = 0.0) -> list[str]:
         """Rank candidate models by quality for a task type.
@@ -118,6 +157,8 @@ class AdaptiveRouter:
                     # Apply local model bonus under budget pressure
                     if budget_pressure > 0.5 and _is_local_model(model):
                         score += 0.2 * budget_pressure
+                    # Apply feedback-loop routing adjustment
+                    score = score * self._get_routing_adjustment(task_type, model)
                     scored.append((model, score))
                 else:
                     unscored.append(model)
