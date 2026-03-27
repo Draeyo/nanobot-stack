@@ -145,6 +145,7 @@ Internet
 - **RSS/News ingestion**: subscribe to any RSS feed; articles are fetched, summarised (cheap model), and embedded every 30 minutes; included in the morning briefing
 - **Cron scheduler**: APScheduler-backed job engine with a REST API and Admin UI tab — define custom jobs beyond the built-in ones
 - **Broadcast notifier**: fan-out delivery over ntfy, Telegram, Discord, and WhatsApp in a single call
+- **Voice interface**: faster-whisper STT + Piper TTS — transcribe audio, synthesize speech, or run a full voice round-trip at `/api/voice/chat`
 </details>
 
 <details>
@@ -155,6 +156,16 @@ Internet
 - **S3-compatible upload**: push to Backblaze B2, AWS S3, or MinIO via `boto3`
 - **REST API**: trigger, list, inspect, or delete backups at `/api/backup`
 - **Restore script**: interactive `scripts/restore.sh` that decrypts, unpacks, and restores from any archive
+</details>
+
+<details>
+<summary><strong>Voice interface</strong> — Talk to your assistant</summary>
+
+- **Speech-to-text**: faster-whisper (local, no cloud API) transcribes audio in any common format
+- **Text-to-speech**: Piper TTS synthesises responses to MP3 audio
+- **Full voice round-trip**: `POST /api/voice/chat` — send audio, get audio back; the full RAG pipeline runs in between
+- **Transcribe-only** (`/api/voice/transcribe`) and **synthesize-only** (`/api/voice/synthesize`) endpoints for partial use
+- Configurable model size: `tiny` for speed, `large-v3` for accuracy; Piper voice selectable per request
 </details>
 
 <details>
@@ -185,6 +196,7 @@ Internet
 - **PII auto-detection**: emails, phones, SSNs, API keys, credit cards scanned and redacted before storage
 - **Approval-gated shell**: system-modifying commands require explicit user approval before execution
 - **Approval-gated config**: configuration changes are validated, staged, diffed, and reviewed before applying
+- **Field encryption at rest** (opt-in): AES-256-GCM encryption of sensitive Qdrant payload fields and SQLite columns; HKDF-derived domain keys; zero-downtime key rotation via `/api/encryption/rotate`
 - Qdrant API key protection
 - systemd hardening (NoNewPrivileges, ProtectSystem=strict…)
 - Secret rotation script with orderly restarts
@@ -891,19 +903,24 @@ nanobot-stack/
 
 ## Roadmap
 
-Features currently in active development (full specs and implementation plans in [`docs/superpowers/`](docs/superpowers/)):
+Full specs and implementation plans in [`docs/superpowers/`](docs/superpowers/).
+
+### In progress — PRs open, pending merge
+
+| Feature | Branch | Description |
+|---------|--------|-------------|
+| **PWA Mobile (Sub-I)** | `feature/sub-i-pwa` | Installable web app — Web Push notifications, offline fallback, responsive mobile chat UI |
+| **Developer Integrations (Sub-J)** | `feature/sub-j-dev-integrations` | GitHub PR/issue/commit sync, Obsidian vault ingestion with WikiLink resolution, daily dev digest in briefing |
+| **Browser Automation (Sub-K)** | `feature/sub-k-browser-automation` | Playwright BrowserAgent — headless Chromium, trust-gated fill/submit, domain allowlist, ephemeral sessions |
+| **Encryption At-Rest (Sub-L)** | `feature/sub-l-encryption-at-rest` | AES-256-GCM field-level encryption for Qdrant payloads and SQLite columns; HKDF domain keys; live key rotation |
+
+### Planned
 
 | Feature | Description | Priority |
 |---------|-------------|----------|
 | **Admin UI v2** | Trust policies tab, cost dashboard with Chart.js projections, procedural workflows tab, agent status tab | High |
 | **Web Search (Sub-D)** | Self-hosted SearXNG integration — private, no tracking, embedded results cached in Qdrant with 6h TTL | High |
 | **Local Document Ingestion (Sub-E)** | Real-time watchdog on a folder — ingest PDF, Markdown, DOCX, TXT automatically as files arrive | High |
-| **Voice Interface (Sub-G)** | STT via faster-whisper, TTS via Piper — full voice round-trip in the Admin UI chat tab | Medium |
-| **Memory Decay & Feedback (Sub-H)** | Exponential decay scoring on memories, feedback-driven routing adjustments | Medium |
-| **PWA Mobile (Sub-I)** | Installable web app with offline support and Web Push notifications | Medium |
-| **Developer Integrations (Sub-J)** | GitHub PR/issue sync, Obsidian vault ingestion with WikiLink resolution | Medium |
-| **Browser Automation (Sub-K)** | Playwright-based BrowserAgent with trust-gated actions and domain allowlist | Low |
-| **Encryption At-Rest (Sub-L)** | AES-256-GCM field-level encryption for sensitive Qdrant payloads and SQLite columns | Low |
 
 ## Contributing
 

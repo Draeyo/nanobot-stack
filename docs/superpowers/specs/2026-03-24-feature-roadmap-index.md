@@ -292,65 +292,68 @@ Spec : [`2026-03-24-sub-project-h-memory-decay.md`](2026-03-24-sub-project-h-mem
 | Table `memory_decay_log` | SQLite | 📋 | Audit suppressions (migration 016) |
 | API REST | `memory_api.py` | 📋 | Decay stats, feedback, forget, routing adjustments |
 
-### 4.7 Sous-projet I — Progressive Web App Mobile 📋
+### 4.7 Sous-projet I — Progressive Web App Mobile ✅
 
 Spec : [`2026-03-24-sub-project-i-pwa-mobile.md`](2026-03-24-sub-project-i-pwa-mobile.md)
+Branche : `feature/sub-i-pwa` — PR ouverte
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| Manifest PWA | `static/manifest.json` | 📋 | Installable sur mobile, display:standalone |
-| Service Worker | `static/sw.js` | 📋 | Cache assets, offline fallback, push handler |
-| Interface mobile | `admin_ui.py` | 📋 | Vue chat responsive (< 768px) avec Alpine.js |
-| Push Notifications | `push_notifications.py` | 📋 | VAPID keys, Web Push API |
-| BroadcastNotifier | `broadcast_notifier.py` | 📋 | Nouveau canal `webpush` |
-| Table SQLite | `push_subscriptions` | 📋 | Migration 017 |
+| Manifest PWA | `static/manifest.json` | ✅ | Installable sur mobile, display:standalone |
+| Service Worker | `static/sw.js` | ✅ | Cache assets, offline fallback, push handler |
+| Interface mobile | `admin_ui.py` | ✅ | Vue chat responsive (< 768px) avec Alpine.js |
+| Push Notifications | `push_notifications.py` | ✅ | VAPID keys, Web Push API |
+| BroadcastNotifier | `broadcast_notifier.py` | ✅ | Nouveau canal `webpush` |
+| Table SQLite | `push_subscriptions` | ✅ | Migration 019 |
 
 **Dépendances Python :** `pywebpush>=2.0`
 
-### 4.8 Sous-projet J — Intégrations Développeur (GitHub & Obsidian) 📋
+### 4.8 Sous-projet J — Intégrations Développeur (GitHub & Obsidian) ✅
 
 Spec : [`2026-03-24-sub-project-j-dev-integrations.md`](2026-03-24-sub-project-j-dev-integrations.md)
+Branche : `feature/sub-j-dev-integrations` — PR ouverte
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| GitHubSyncer | `dev_integrations.py` | 📋 | Sync PRs, issues, commits via API GitHub |
-| ObsidianIngestor | `obsidian_ingestor.py` | 📋 | Extension LocalDocIngestor + YAML frontmatter + WikiLinks |
-| Section briefing | `scheduler_executor.py` | 📋 | Section `dev_digest` — activité GitHub du jour |
-| Extension `memory_projects` | Qdrant | 📋 | Nouveaux payloads `source:github` |
-| Table SQLite | `github_sync_log` | 📋 | Migration 018 |
-| Table SQLite | `obsidian_index` | 📋 | Backlinks WikiLink tracking |
+| GitHubSyncer | `dev_integrations.py` | ✅ | Sync PRs, issues, commits via API GitHub |
+| ObsidianIngestor | `obsidian_ingestor.py` | ✅ | Extension LocalDocIngestor + YAML frontmatter + WikiLinks |
+| Section briefing | `scheduler_executor.py` | ✅ | Section `dev_digest` — activité GitHub du jour |
+| Extension `memory_projects` | Qdrant | ✅ | Nouveaux payloads `source:github` |
+| Table SQLite | `github_sync_log` | ✅ | Migration 020 |
+| Table SQLite | `obsidian_index` | ✅ | Backlinks WikiLink tracking |
 
 **Dépendances Python :** `PyGithub>=2.0`
 
-### 4.9 Sous-projet K — Browser Automation (Playwright) 📋
+### 4.9 Sous-projet K — Browser Automation (Playwright) ✅
 
 Spec : [`2026-03-24-sub-project-k-browser-automation.md`](2026-03-24-sub-project-k-browser-automation.md)
+Branche : `feature/sub-k-browser-automation` — PR ouverte — **357 tests ✅ pylint 10.00/10**
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| BrowserAgent | `agents/browser_agent.py` | 📋 | Agent Playwright headless, étend AgentBase |
-| Docker Playwright | `docker-compose.yml` | 📋 | Sidecar Chromium sandboxé |
-| Trust integration | `trust_engine.py` | 📋 | Niveaux par action : read/fill/submit |
-| Domain allowlist | `browser_agent.py` | 📋 | `BROWSER_ALLOWED_DOMAINS` — réseau restreint |
-| Collection Qdrant | `browser_screenshots` | 📋 | Screenshots optionnels, TTL 24h |
-| Table SQLite | `browser_action_log` | 📋 | Migration 019 |
-| API REST | `browser_api.py` | 📋 | `POST /api/browser/run` + logs |
+| BrowserAgent | `agents/browser_agent.py` | ✅ | Agent Playwright headless, étend AgentBase |
+| Docker Playwright | `docker-compose.yml` | ✅ | Sidecar Chromium sandboxé |
+| Trust integration | `trust_engine.py` | ✅ | Niveaux par action : read/fill/submit ; `browser_submit` jamais auto-promu |
+| Domain allowlist | `browser_agent.py` | ✅ | `BROWSER_ALLOWED_DOMAINS` — réseau restreint |
+| Collection Qdrant | `browser_screenshots` | ✅ | Screenshots optionnels, TTL 24h |
+| Table SQLite | `browser_action_log` | ✅ | Migration 021 |
+| API REST | `browser_api.py` | ✅ | `POST /api/browser/run` + logs |
 
 **Dépendances Python :** `playwright>=1.44`
 
-### 4.10 Sous-projet L — Chiffrement At-Rest 📋
+### 4.10 Sous-projet L — Chiffrement At-Rest ✅
 
 Spec : [`2026-03-24-sub-project-l-encryption-at-rest.md`](2026-03-24-sub-project-l-encryption-at-rest.md)
+Branche : `feature/sub-l-encryption-at-rest` — PR ouverte — **396 tests ✅ pylint 10.00/10**
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
-| FieldEncryptor | `encryption.py` | 📋 | AES-256-GCM, HKDF, préfixe `enc:v1:` |
-| Chiffrement SQLite | Injecteur dans tous les modules | 📋 | Champs sensibles : entities.value, feedback.correction |
-| Chiffrement Qdrant | Dans chaque ingestor | 📋 | Payloads memory_personal, email_inbox, calendar_events |
-| Key rotation | `encryption_api.py` | 📋 | Re-chiffrement en ligne |
-| Migration enable/disable | `encryption_api.py` | 📋 | Idempotent, check préfixe enc:v1: |
-| API REST | `encryption_api.py` | 📋 | Status, enable, disable, rotate, migration-status |
-| Documentation FS | `README.md` | 📋 | eCryptfs/LUKS setup — approche recommandée |
+| FieldEncryptor | `encryption.py` | ✅ | AES-256-GCM, HKDF, préfixe `enc:v1:` — deux clés domaine (`sqlite-v1`, `qdrant-v1`) |
+| Chiffrement SQLite | `knowledge_graph.py`, `email_calendar.py` | ✅ | `entities.description`, `email_sync_log.account` |
+| Chiffrement Qdrant | `email_calendar.py`, `app.py` | ✅ | Payloads memory_personal, email_inbox, calendar_events |
+| Key rotation | `encryption_api.py` | ✅ | Re-chiffrement en ligne, isolement par erreur de ligne |
+| Migration enable/disable | `encryption_migrations.py` | ✅ | Idempotent, check préfixe enc:v1:, failsafe par ligne/point |
+| API REST | `encryption_api.py` | ✅ | Status, enable, disable, rotate, migration-status |
 
 **Dépendances Python :** `cryptography>=42.0` (déjà requis par sous-projet F)
 
@@ -473,13 +476,13 @@ Spec : [`2026-03-24-sub-project-l-encryption-at-rest.md`](2026-03-24-sub-project
 ✅ Sous-projet B — Email/Calendrier       [implémenté — 18 tests]
 ✅ Sous-projet C — RSS/News               [implémenté — 19 tests]
 🔧 Admin UI v2 (4 onglets manquants)      [priorité haute]
-📋 Sous-projet D — Recherche Web          [priorité haute]
-📋 Sous-projet E — Ingestion Docs         [priorité haute]
+📋 Sous-projet D — Recherche Web          [priorité haute — branche: feature/sub-d-web-search]
+📋 Sous-projet E — Ingestion Docs         [priorité haute — branche: feature/sub-e-local-docs]
 ✅ Sous-projet F — Backup & Restore       [implémenté — 11 tests]
-📋 Sous-projet G — Interface Vocale       [priorité moyenne]
-📋 Sous-projet H — Memory Decay           [priorité moyenne]
-📋 Sous-projet I — PWA Mobile             [priorité moyenne]
-📋 Sous-projet J — Intégrations Dev       [priorité moyenne]
-📋 Sous-projet K — Browser Automation     [priorité basse]
-📋 Sous-projet L — Chiffrement At-Rest    [priorité basse]
+✅ Sous-projet G — Interface Vocale       [implémenté — mergé sur main]
+✅ Sous-projet H — Memory Decay           [implémenté — mergé sur main]
+🔧 Sous-projet I — PWA Mobile             [implémenté — PR ouverte: feature/sub-i-pwa]
+🔧 Sous-projet J — Intégrations Dev       [implémenté — PR ouverte: feature/sub-j-dev-integrations]
+🔧 Sous-projet K — Browser Automation     [implémenté — 357 tests — PR ouverte: feature/sub-k-browser-automation]
+🔧 Sous-projet L — Chiffrement At-Rest    [implémenté — 396 tests — PR ouverte: feature/sub-l-encryption-at-rest]
 ```
