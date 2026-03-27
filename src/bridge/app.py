@@ -1084,7 +1084,7 @@ def search(body: SearchIn):
                 _decay_mgr.confirm_access(rp.get("collection", "memory_personal"), str(rp.get("id", "")))
     except Exception as _decay_exc:
         logger.debug("confirm_access failed (non-critical): %s", _decay_exc)
-    if _qdrant_enc_instance is not None:
+    if ENCRYPTION_QDRANT_ENABLED_FLAG and _qdrant_enc_instance is not None:
         for item in reranked:
             p = item.get("payload", {})
             if "text" in p and isinstance(p["text"], str):
