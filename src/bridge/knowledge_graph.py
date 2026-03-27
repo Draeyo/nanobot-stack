@@ -24,6 +24,36 @@ DB_PATH = STATE_DIR / "knowledge_graph.db"
 _lock = threading.Lock()
 _v10_migrated = False
 
+# ---------------------------------------------------------------------------
+# Sub-projet L: optional field-level encryption
+# ---------------------------------------------------------------------------
+_kg_encryptor = None  # set by app.py via set_encryptor()
+
+ENCRYPTION_SQLITE_ENABLED = (
+    os.getenv("ENCRYPTION_SQLITE_ENABLED",
+              os.getenv("ENCRYPTION_ENABLED", "false")).lower() == "true"
+)
+
+
+def set_encryptor(encryptor) -> None:  # type: ignore[type-arg]
+    """Inject the FieldEncryptor instance. Called by app.py at startup."""
+    global _kg_encryptor  # pylint: disable=global-statement
+    _kg_encryptor = encryptor
+
+
+def _enc(value: str) -> str:
+    """Encrypt value if encryption is enabled and encryptor is set."""
+    if ENCRYPTION_SQLITE_ENABLED and _kg_encryptor is not None:
+        return _kg_encryptor.encrypt_field(value)
+    return value
+
+
+def _dec(value: str) -> str:
+    """Decrypt value if encryptor is set (transparent passthrough for plaintext)."""
+    if _kg_encryptor is not None:
+        return _kg_encryptor.decrypt_field(value)
+    return value
+
 ENTITY_TYPES = ["person", "project", "technology", "concept", "organization",
                  "decision", "event", "deadline", "location", "tool", "workflow", "preference"]
 RELATION_TYPES = ["works_on", "decided", "uses", "depends_on", "related_to", "created",
@@ -144,7 +174,7 @@ def extract_and_store(text: str, run_chat_fn) -> dict[str, Any]:
                                 updated_at = ?,
                                 description = CASE WHEN length(excluded.description) > length(entities.description)
                                               THEN excluded.description ELSE entities.description END""",
-                           (name, etype, desc, now, now, now, now, now))
+                           (name, etype, _enc(desc), now, now, now, now, now))
                 stored_entities += 1
 
             for rel in relations:
@@ -191,7 +221,7 @@ def query_entity(name: str, depth: int = 1) -> dict[str, Any]:  # pylint: disabl
                 return {"found": False}
 
             entity_info = {
-                "name": ent[0], "type": ent[1], "description": ent[2],
+                "name": ent[0], "type": ent[1], "description": _dec(ent[2]),
                 "mention_count": ent[3], "first_seen": ent[4], "last_seen": ent[5],
             }
 
@@ -289,7 +319,7 @@ def query_by_type(entity_type: str, limit: int = 50) -> list[dict[str, Any]]:
                 "SELECT name, type, description, mention_count, first_seen, last_seen FROM entities WHERE type = ? ORDER BY mention_count DESC LIMIT ?",
                 (entity_type, limit)
             ).fetchall()
-            return [{"name": r[0], "type": r[1], "description": r[2], "mention_count": r[3], "first_seen": r[4], "last_seen": r[5]} for r in rows]
+            return [{"name": r[0], "type": r[1], "description": _dec(r[2]), "mention_count": r[3], "first_seen": r[4], "last_seen": r[5]} for r in rows]
         finally:
             db.close()
 
@@ -344,7 +374,7 @@ def get_subgraph(entity: str, depth: int = 2) -> dict[str, Any]:
                     visited.add(node)
                     ent = db.execute("SELECT name, type, description, mention_count FROM entities WHERE name = ?", (node,)).fetchone()
                     if ent:
-                        all_entities.append({"name": ent[0], "type": ent[1], "description": ent[2], "mention_count": ent[3]})
+                        all_entities.append({"name": ent[0], "type": ent[1], "description": _dec(ent[2]), "mention_count": ent[3]})
                     rels = db.execute(
                         "SELECT source, relation, target, context, strength FROM relations WHERE source = ? OR target = ?",
                         (node, node)

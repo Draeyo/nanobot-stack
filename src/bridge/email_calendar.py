@@ -48,6 +48,55 @@ class EmailCalendarFetcher:
 
         self._db_path = str(STATE_DIR / "scheduler.db")
 
+        # Sub-projet L: field-level encryption
+        self._encryptor = None
+        self._sqlite_enc_enabled = (
+            os.getenv("ENCRYPTION_SQLITE_ENABLED",
+                      os.getenv("ENCRYPTION_ENABLED", "false")).lower() == "true"
+        )
+        self._qdrant_enc_enabled = (
+            os.getenv("ENCRYPTION_QDRANT_ENABLED",
+                      os.getenv("ENCRYPTION_ENABLED", "false")).lower() == "true"
+        )
+
+    def set_encryptor(self, encryptor) -> None:
+        """Inject the FieldEncryptor instance. Called by app.py at startup."""
+        self._encryptor = encryptor
+
+    def _enc_field(self, value: str) -> str:
+        """Encrypt value if SQLite encryption is enabled and encryptor is set."""
+        if self._sqlite_enc_enabled and self._encryptor is not None:
+            return self._encryptor.encrypt_field(value)
+        return value
+
+    def _dec_field(self, value: str) -> str:
+        """Decrypt value if encryptor is set (transparent passthrough for plaintext)."""
+        if self._encryptor is not None:
+            return self._encryptor.decrypt_field(value)
+        return value
+
+    def _encrypt_payload(self, payload: dict, fields: list[str]) -> dict:
+        """Return a copy of payload with target fields encrypted (idempotent)."""
+        if self._encryptor is None:
+            return payload
+        result = payload.copy()
+        for field in fields:
+            val = result.get(field)
+            if isinstance(val, str) and not self._encryptor.is_encrypted(val):
+                result[field] = self._encryptor.encrypt_field(val)
+        return result
+
+    def _decrypt_payload(self, payload: dict, fields: list[str]) -> dict:
+        """Return a copy of payload with target fields decrypted (passthrough if plaintext)."""
+        if self._encryptor is None:
+            return payload
+        result = payload.copy()
+        for field in fields:
+            val = result.get(field)
+            if isinstance(val, str):
+                result[field] = self._encryptor.decrypt_field(val)
+        return result
+
     # ------------------------------------------------------------------
     # Public async interface
     # ------------------------------------------------------------------
@@ -454,6 +503,9 @@ class EmailCalendarFetcher:
                     "expires_at": expires_at,
                 }
 
+                if self._qdrant_enc_enabled:
+                    payload = self._encrypt_payload(payload, ["subject", "snippet", "sender"])
+
                 qdrant_client.upsert(
                     collection_name="email_inbox",
                     points=[PointStruct(id=point_id, vector=vector, payload=payload)],
@@ -499,6 +551,9 @@ class EmailCalendarFetcher:
                     "expires_at": expires_at,
                 }
 
+                if self._qdrant_enc_enabled:
+                    payload = self._encrypt_payload(payload, ["description"])
+
                 qdrant_client.upsert(
                     collection_name="calendar_events",
                     points=[PointStruct(id=point_id, vector=vector, payload=payload)],
@@ -516,6 +571,7 @@ class EmailCalendarFetcher:
     def _update_sync_log(self, account: str, last_synced: str,
                           items_synced: int, status: str) -> None:
         log_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"sync-log-{account}"))
+        stored_account = self._enc_field(account)
         try:
             db = sqlite3.connect(self._db_path)
             try:
@@ -523,7 +579,7 @@ class EmailCalendarFetcher:
                     INSERT OR REPLACE INTO email_sync_log
                         (id, account, last_synced, items_synced, status)
                     VALUES (?, ?, ?, ?, ?)
-                """, (log_id, account, last_synced, items_synced, status))
+                """, (log_id, stored_account, last_synced, items_synced, status))
                 db.commit()
             finally:
                 db.close()
@@ -539,7 +595,8 @@ class EmailCalendarFetcher:
                 rows = db.execute(
                     "SELECT account, last_synced, items_synced, status FROM email_sync_log"
                 ).fetchall()
-                for account, last_synced, items_synced, status in rows:
+                for account_raw, last_synced, items_synced, status in rows:
+                    account = self._dec_field(account_raw)
                     result[account] = {
                         "last_synced": last_synced,
                         "items_synced": items_synced,

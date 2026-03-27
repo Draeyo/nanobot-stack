@@ -146,6 +146,41 @@ llm_cache = LLMResponseCache()
 token_tracker = TokenTracker()
 
 # ---------------------------------------------------------------------------
+# Sub-projet L: Encryption At-Rest
+# ---------------------------------------------------------------------------
+_sqlite_encryptor = None
+_qdrant_enc_instance = None
+
+ENCRYPTION_ENABLED = os.getenv("ENCRYPTION_ENABLED", "false").lower() == "true"
+ENCRYPTION_SQLITE_ENABLED = os.getenv(
+    "ENCRYPTION_SQLITE_ENABLED", os.getenv("ENCRYPTION_ENABLED", "false")
+).lower() == "true"
+ENCRYPTION_QDRANT_ENABLED_FLAG = os.getenv(
+    "ENCRYPTION_QDRANT_ENABLED", os.getenv("ENCRYPTION_ENABLED", "false")
+).lower() == "true"
+
+if ENCRYPTION_ENABLED or ENCRYPTION_SQLITE_ENABLED or ENCRYPTION_QDRANT_ENABLED_FLAG:
+    _master_key = os.getenv("ENCRYPTION_MASTER_KEY", "")
+    if not _master_key:
+        raise RuntimeError(
+            "ENCRYPTION_MASTER_KEY is required when ENCRYPTION_ENABLED=true. "
+            "Set it in stack.env or generate with: python3 -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    try:
+        from encryption import FieldEncryptor, validate_encryption_key  # pylint: disable=import-outside-toplevel
+        _sqlite_encryptor = FieldEncryptor(_master_key, "sqlite-v1")
+        _qdrant_enc_instance = FieldEncryptor(_master_key, "qdrant-v1")
+        validate_encryption_key(_sqlite_encryptor)
+        validate_encryption_key(_qdrant_enc_instance)
+        logger.info("Sub-projet L: encryption at-rest initialized (sqlite=%s qdrant=%s)",
+                    ENCRYPTION_SQLITE_ENABLED, ENCRYPTION_QDRANT_ENABLED_FLAG)
+        import knowledge_graph as _kg  # pylint: disable=import-outside-toplevel
+        _kg.set_encryptor(_sqlite_encryptor)
+        _qdrant_encryptor = _qdrant_enc_instance
+    except Exception as _enc_exc:
+        raise RuntimeError(f"Encryption startup failed: {_enc_exc}") from _enc_exc
+
+# ---------------------------------------------------------------------------
 # FastAPI app with middlewares
 # ---------------------------------------------------------------------------
 app = FastAPI(title="nanobot-rag-bridge-v9")
@@ -1049,6 +1084,14 @@ def search(body: SearchIn):
                 _decay_mgr.confirm_access(rp.get("collection", "memory_personal"), str(rp.get("id", "")))
     except Exception as _decay_exc:
         logger.debug("confirm_access failed (non-critical): %s", _decay_exc)
+    if _qdrant_enc_instance is not None:
+        for item in reranked:
+            p = item.get("payload", {})
+            if "text" in p and isinstance(p["text"], str):
+                try:
+                    p["text"] = _qdrant_enc_instance.decrypt_field(p["text"])
+                except Exception:  # pylint: disable=broad-except
+                    pass
     return {"query": body.query, "results": reranked, "embedding_attempts": embedding_attempts, "collections": collections}
 
 @app.post("/remember", dependencies=[Depends(verify_token)])
@@ -1107,6 +1150,9 @@ def remember(body: RememberIn):
     }
     if pii_types_found:
         payload["pii_redacted"] = pii_types_found
+    if ENCRYPTION_QDRANT_ENABLED_FLAG and _qdrant_enc_instance is not None:
+        if not _qdrant_enc_instance.is_encrypted(payload.get("text", "")):
+            payload["text"] = _qdrant_enc_instance.encrypt_field(payload["text"])
     qdrant.upsert(collection_name=body.collection, points=[models.PointStruct(id=point_id, vector=point_vectors, payload=payload)])
     return {"ok": True, "id": point_id, "payload": payload, "embedding_attempts": embedding_attempts, "summary_attempts": summary_attempts}
 
@@ -1572,3 +1618,19 @@ try:
     app.include_router(browser_router)
 except Exception as _browser_exc:
     logger.info("Browser API not loaded: %s", _browser_exc)
+
+# ---------------------------------------------------------------------------
+# Sub-projet L: Encryption API
+# ---------------------------------------------------------------------------
+try:
+    from encryption_api import router as encryption_router, init_encryption_api  # pylint: disable=import-outside-toplevel
+    init_encryption_api(
+        encryptor_sqlite=_sqlite_encryptor,
+        encryptor_qdrant=_qdrant_enc_instance,
+        qdrant_client=qdrant,
+        state_dir=str(STATE_DIR),
+    )
+    app.include_router(encryption_router, dependencies=[Depends(verify_token)])
+    logger.info("Encryption endpoints mounted (/api/encryption/*)")
+except Exception as exc:  # pylint: disable=broad-except
+    logger.info("Encryption API not loaded: %s", exc)
