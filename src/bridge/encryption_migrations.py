@@ -48,6 +48,7 @@ def _sqlite_encrypt_column(
     total = len(rows)
     processed = 0
     skipped = 0
+    failed = 0
 
     try:
         for rowid, value in rows:
@@ -63,7 +64,15 @@ def _sqlite_encrypt_column(
                 if not encryptor.is_encrypted(value):
                     skipped += 1
                     continue
-                new_value = encryptor.decrypt_field(value)
+                try:
+                    new_value = encryptor.decrypt_field(value)
+                except Exception as row_exc:  # pylint: disable=broad-except
+                    logger.warning(
+                        "Skipping undecryptable row rowid=%s in %s.%s: %s",
+                        rowid, table, column, row_exc,
+                    )
+                    failed += 1
+                    continue
             db.execute(f"UPDATE {table} SET {column} = ? WHERE rowid = ?", (new_value, rowid))
             processed += 1
         db.commit()
@@ -71,10 +80,10 @@ def _sqlite_encrypt_column(
         db.close()
 
     logger.info(
-        "%s %s.%s: processed=%d skipped=%d total=%d",
-        direction, table, column, processed, skipped, total,
+        "%s %s.%s: processed=%d skipped=%d failed=%d total=%d",
+        direction, table, column, processed, skipped, failed, total,
     )
-    return {"processed": processed, "total": total, "skipped": skipped}
+    return {"processed": processed, "total": total, "skipped": skipped, "failed": failed}
 
 
 def _qdrant_encrypt_collection(
@@ -216,12 +225,21 @@ def run_rotation_migration(
             db = sqlite3.connect(db_path)
             db.execute("PRAGMA journal_mode=WAL")
             processed = 0
+            failed = 0
             try:
                 rows = db.execute(f"SELECT rowid, {column} FROM {table}").fetchall()
                 for rowid, value in rows:
                     if not isinstance(value, str) or not old_encryptor_sqlite.is_encrypted(value):
                         continue
-                    plain = old_encryptor_sqlite.decrypt_field(value)
+                    try:
+                        plain = old_encryptor_sqlite.decrypt_field(value)
+                    except Exception as row_exc:  # pylint: disable=broad-except
+                        logger.warning(
+                            "Skipping undecryptable row rowid=%s in %s.%s during rotation: %s",
+                            rowid, table, column, row_exc,
+                        )
+                        failed += 1
+                        continue
                     new_value = new_enc_sqlite.encrypt_field(plain)
                     db.execute(f"UPDATE {table} SET {column} = ? WHERE rowid = ?", (new_value, rowid))
                     processed += 1
@@ -230,7 +248,7 @@ def run_rotation_migration(
                 pass
             finally:
                 db.close()
-            progress["sqlite"][f"{table}.{column}"] = {"processed": processed}
+            progress["sqlite"][f"{table}.{column}"] = {"processed": processed, "failed": failed}
 
     if old_encryptor_qdrant is not None and qdrant_client is not None:
         for collection, fields in QDRANT_TARGETS:

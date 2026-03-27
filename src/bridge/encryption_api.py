@@ -224,7 +224,7 @@ async def rotate_key(body: RotateRequest) -> dict:
     try:
         bytes.fromhex(new_key)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=f"new_master_key is not valid hex: {exc}") from exc
+        raise HTTPException(status_code=400, detail="new_master_key contains invalid hex characters") from exc
 
     current_key = os.getenv("ENCRYPTION_MASTER_KEY", "")
     if new_key == current_key:
@@ -265,16 +265,18 @@ async def _run_enable_migration(job_id: str) -> None:
     """Async task: encrypt all plaintext values in SQLite and Qdrant."""
     from encryption_migrations import run_enable_migration  # pylint: disable=import-outside-toplevel
     try:
-        progress = await asyncio.get_event_loop().run_in_executor(
+        progress = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: run_enable_migration(
                 _encryptor_sqlite, _encryptor_qdrant, _qdrant_client, _state_dir
             ),
         )
-        _migration_job.update({"status": "completed", "completed_at": _utcnow(), "progress": progress})
+        with _migration_lock:
+            _migration_job.update({"status": "completed", "completed_at": _utcnow(), "progress": progress})
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("Enable migration failed: %s", exc)
-        _migration_job.update({"status": "error", "completed_at": _utcnow(), "error": str(exc)})
+        with _migration_lock:
+            _migration_job.update({"status": "error", "completed_at": _utcnow(), "error": str(exc)})
     logger.debug("Enable migration task finished: %s", job_id)
 
 
@@ -282,16 +284,18 @@ async def _run_disable_migration(job_id: str) -> None:
     """Async task: decrypt all enc:v1: values in SQLite and Qdrant."""
     from encryption_migrations import run_disable_migration  # pylint: disable=import-outside-toplevel
     try:
-        progress = await asyncio.get_event_loop().run_in_executor(
+        progress = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: run_disable_migration(
                 _encryptor_sqlite, _encryptor_qdrant, _qdrant_client, _state_dir
             ),
         )
-        _migration_job.update({"status": "completed", "completed_at": _utcnow(), "progress": progress})
+        with _migration_lock:
+            _migration_job.update({"status": "completed", "completed_at": _utcnow(), "progress": progress})
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("Disable migration failed: %s", exc)
-        _migration_job.update({"status": "error", "completed_at": _utcnow(), "error": str(exc)})
+        with _migration_lock:
+            _migration_job.update({"status": "error", "completed_at": _utcnow(), "error": str(exc)})
     logger.debug("Disable migration task finished: %s", job_id)
 
 
@@ -299,14 +303,16 @@ async def _run_rotation_migration(job_id: str, new_key_hex: str) -> None:
     """Async task: re-encrypt all values with new_key_hex."""
     from encryption_migrations import run_rotation_migration  # pylint: disable=import-outside-toplevel
     try:
-        progress = await asyncio.get_event_loop().run_in_executor(
+        progress = await asyncio.get_running_loop().run_in_executor(
             None,
             lambda: run_rotation_migration(
                 _encryptor_sqlite, _encryptor_qdrant, _qdrant_client, _state_dir, new_key_hex
             ),
         )
-        _migration_job.update({"status": "completed", "completed_at": _utcnow(), "progress": progress})
+        with _migration_lock:
+            _migration_job.update({"status": "completed", "completed_at": _utcnow(), "progress": progress})
     except Exception as exc:  # pylint: disable=broad-except
         logger.exception("Rotation migration failed: %s", exc)
-        _migration_job.update({"status": "error", "completed_at": _utcnow(), "error": str(exc)})
+        with _migration_lock:
+            _migration_job.update({"status": "error", "completed_at": _utcnow(), "error": str(exc)})
     logger.debug("Rotation migration task finished: %s", job_id)
