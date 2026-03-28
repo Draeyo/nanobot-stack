@@ -97,19 +97,31 @@ def create_custom_agent(
     return dict(row)
 
 
+_UPDATABLE_COLUMNS = frozenset({"name", "description", "system_prompt", "forced_model", "tools", "enabled"})
+
 def update_custom_agent(agent_id: str, **fields) -> dict[str, Any] | None:
-    allowed = {"name", "description", "system_prompt", "forced_model", "tools", "enabled"}
-    updates = {k: v for k, v in fields.items() if k in allowed}
+    updates = {k: v for k, v in fields.items() if k in _UPDATABLE_COLUMNS}
     if not updates:
         return get_custom_agent(agent_id)
     if "tools" in updates and isinstance(updates["tools"], list):
         updates["tools"] = json.dumps(updates["tools"])
     updates["updated_at"] = datetime.now(timezone.utc).isoformat()
-    set_clause = ", ".join(f"{k}=?" for k in updates)
-    values = list(updates.values()) + [agent_id]
+    # Build SET clause from hardcoded column names only (no user input in SQL)
+    columns = [c for c in updates if c in _UPDATABLE_COLUMNS or c == "updated_at"]
+    set_parts = []
+    values = []
+    for col in columns:
+        set_parts.append(
+            {"name": "name=?", "description": "description=?", "system_prompt": "system_prompt=?",
+             "forced_model": "forced_model=?", "tools": "tools=?", "enabled": "enabled=?",
+             "updated_at": "updated_at=?"}[col]
+        )
+        values.append(updates[col])
+    values.append(agent_id)
+    sql = "UPDATE custom_agents SET " + ", ".join(set_parts) + " WHERE id=?"
     with _lock:
         conn = _db()
-        conn.execute(f"UPDATE custom_agents SET {set_clause} WHERE id=?", values)
+        conn.execute(sql, values)
         conn.commit()
         row = conn.execute("SELECT * FROM custom_agents WHERE id=?", (agent_id,)).fetchone()
         conn.close()
