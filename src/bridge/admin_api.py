@@ -54,6 +54,7 @@ def read_audit_log(
     offset: int = Query(0, ge=0),
     method: str = Query(""),
     path_filter: str = Query(""),
+    level: str = Query(""),
 ):
     """Read recent audit log entries with optional filters."""
     if _verify_token:
@@ -79,6 +80,8 @@ def read_audit_log(
                 if method and record.get("method", "") != method.upper():
                     continue
                 if path_filter and path_filter not in record.get("path", ""):
+                    continue
+                if level and record.get("level", "") != level.upper():
                     continue
 
                 entries.append(record)

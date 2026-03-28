@@ -30,3 +30,4 @@ pydub>=0.25
 watchdog>=3.0
 pywebpush>=2.0
 playwright>=1.44
+psutil>=5.9

@@ -46,11 +46,22 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         token = request.headers.get("X-Bridge-Token", "")
         client_ip = request.client.host if request.client else "unknown"
 
+        status_code = response.status_code
+        if status_code >= 500:
+            level = "ERROR"
+        elif status_code >= 400:
+            level = "WARNING"
+        elif request.method == "GET":
+            level = "DEBUG"
+        else:
+            level = "INFO"
+
         record = {
             "ts": datetime.now(timezone.utc).isoformat(),
             "method": request.method,
             "path": request.url.path,
-            "status": response.status_code,
+            "status": status_code,
+            "level": level,
             "ip": client_ip,
             "token_fp": _token_fingerprint(token),
             "ms": elapsed_ms,

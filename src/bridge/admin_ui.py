@@ -320,6 +320,17 @@ SECTION_ANALYTICS = """
     <div class="card"><h3>Token Usage by Model</h3><div class="chart-container"><canvas id="costChart"></canvas></div></div>
     <div class="card"><h3>Cache Performance</h3><div class="chart-container"><canvas id="cacheChart"></canvas></div></div>
   </div>
+  <div class="grid-wide mb-16">
+    <div class="card">
+      <h3>Most Used Tools (calls)</h3>
+      <div class="chart-container" style="height:260px"><canvas id="mostUsedChart"></canvas></div>
+    </div>
+    <div class="card" x-show="agentAdvice">
+      <h3>Agent Advice</h3>
+      <div class="text-sm" x-text="agentAdvice"></div>
+      <button class="btn btn-blue btn-sm mt-8" @click="agentAdvice=''">Dismiss</button>
+    </div>
+  </div>
   <div class="card mb-16">
     <div class="flex-between mb-8">
       <h3>Live Agent Activity</h3>
@@ -838,6 +849,32 @@ SECTION_CHAT = """
         <template x-for="(s,i) in chatSources" :key="i">
           <div class="text-sm mb-4"><span class="badge badge-blue" x-text="'['+s.num+']'"></span> <span x-text="s.source||s.collection||''"></span></div>
         </template>
+      </div>
+      <div class="card mt-12" x-show="chatInternals.length">
+        <h3>Agent Internals</h3>
+        <div style="max-height:300px;overflow-y:auto">
+          <template x-for="(ev,i) in chatInternals" :key="i">
+            <div style="padding:4px 0;border-bottom:1px solid var(--ghost-border)">
+              <div class="flex gap-8">
+                <span class="badge" :class="ev.status==='done'?'badge-green':ev.status==='error'?'badge-red':'badge-blue'" x-text="ev.phase"></span>
+                <span class="mono text-xs text-muted" x-text="ev.detail||''"></span>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+      <div class="card mt-12" x-show="chatTraceSteps.length">
+        <h3>AI Decision Trace</h3>
+        <div style="position:relative;padding-left:16px;border-left:2px solid rgba(64,72,93,.15)">
+          <template x-for="(step,i) in chatTraceSteps" :key="i">
+            <div style="padding:6px 0;position:relative">
+              <div style="position:absolute;left:-21px;top:10px;width:10px;height:10px;border-radius:50%;background:var(--primary)"></div>
+              <div class="text-sm" x-text="step.phase"></div>
+              <div class="text-xs text-muted" x-text="step.summary||''"></div>
+              <span class="badge badge-blue text-xs" x-show="step.confidence" x-text="(step.confidence*100).toFixed(0)+'% confidence'"></span>
+            </div>
+          </template>
+        </div>
       </div>
     </div>
   </div>
@@ -1646,6 +1683,100 @@ SECTION_SCHEDULER = """
 """
 
 # ---------------------------------------------------------------------------
+# Section: Monitoring (Stitch L-feature)
+# ---------------------------------------------------------------------------
+SECTION_MONITORING = """
+<section x-show="tab==='monitoring'" x-cloak>
+  <div class="flex-between mb-12">
+    <h2>Server Monitoring</h2>
+    <div class="flex gap-8">
+      <span class="badge badge-green" x-show="monitorSnap.cpu_percent!=null">System Operational</span>
+      <span class="text-xs text-muted mono" x-text="monitorSnap.timestamp?.substring(11,19)+' UTC'||''"></span>
+      <button class="btn btn-muted btn-sm" @click="loadMonitoring()">Refresh</button>
+    </div>
+  </div>
+
+  <!-- Key metric cards -->
+  <div class="grid mb-16">
+    <div class="card">
+      <h3>CPU Usage</h3>
+      <div class="stat" :class="monitorSnap.cpu_percent>80?'text-red':monitorSnap.cpu_percent>50?'text-yellow':'text-green'"
+        x-text="(monitorSnap.cpu_percent||0).toFixed(1)+'%'"></div>
+      <div class="progress-track mt-8">
+        <div class="progress-fill" :style="'width:'+Math.min(100,monitorSnap.cpu_percent||0)+'%;background:var(--'+(monitorSnap.cpu_percent>80?'error':monitorSnap.cpu_percent>50?'yellow':'tertiary-dim')+')'"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>RAM Allocation</h3>
+      <div class="stat-value" x-text="(monitorSnap.ram_used_gb||0).toFixed(1)+' / '+(monitorSnap.ram_total_gb||0).toFixed(1)+' GB'"></div>
+      <div class="progress-track mt-8">
+        <div class="progress-fill" style="background:var(--secondary)" :style="'width:'+(monitorSnap.ram_percent||0)+'%'"></div>
+      </div>
+      <div class="text-xs text-muted mt-4" x-text="(monitorSnap.ram_percent||0).toFixed(1)+'%'"></div>
+    </div>
+    <div class="card">
+      <h3>Disk Usage</h3>
+      <div class="stat-value" x-text="(monitorSnap.disk_used_gb||0).toFixed(1)+' / '+(monitorSnap.disk_total_gb||0).toFixed(1)+' GB'"></div>
+      <div class="progress-track mt-8">
+        <div class="progress-fill" style="background:var(--primary)" :style="'width:'+(monitorSnap.disk_percent||0)+'%'"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Network I/O</h3>
+      <div class="text-sm"><span class="text-muted">Sent:</span> <span class="mono" x-text="(monitorSnap.net_sent_mb||0).toLocaleString()+' MB'"></span></div>
+      <div class="text-sm"><span class="text-muted">Recv:</span> <span class="mono" x-text="(monitorSnap.net_recv_mb||0).toLocaleString()+' MB'"></span></div>
+      <div class="text-xs text-muted mt-8" x-text="'Uptime: '+formatUptime(monitorSnap.uptime_seconds||0)"></div>
+    </div>
+  </div>
+
+  <!-- Live resource history chart -->
+  <div class="card mb-16">
+    <h3>Live Resource History (60 min)</h3>
+    <div class="chart-container">
+      <canvas id="resourceHistoryChart"></canvas>
+    </div>
+  </div>
+
+  <!-- System Load Heatmap -->
+  <div class="card mb-16">
+    <h3>System Load Heatmap (24h)</h3>
+    <div style="display:flex;flex-wrap:wrap;gap:2px;margin-top:8px">
+      <template x-for="(slot,i) in monitorHeatmap" :key="i">
+        <div :title="slot.t?.substring(11,16)+' CPU:'+slot.cpu+'%'"
+          :style="'width:12px;height:12px;border-radius:2px;background:rgba('+(slot.cpu>80?'255,110,132':slot.cpu>50?'234,179,8':'88,231,171')+','+(Math.max(0.1,slot.cpu/100))+')'"></div>
+      </template>
+    </div>
+    <div class="flex-between mt-4 text-xs text-muted">
+      <span>24h ago</span><span>Now</span>
+    </div>
+  </div>
+
+  <!-- Critical Alerts -->
+  <div class="card">
+    <div class="flex-between mb-8">
+      <h3>System Alerts</h3>
+      <span class="badge badge-muted" x-text="monitorAlerts.length+' alerts'"></span>
+    </div>
+    <template x-if="monitorAlerts.length">
+      <div style="max-height:300px;overflow-y:auto">
+        <template x-for="(a,i) in monitorAlerts" :key="i">
+          <div style="padding:10px 0;border-bottom:1px solid var(--ghost-border)">
+            <div class="flex gap-8">
+              <span class="badge" :class="a.level==='high'?'badge-red':'badge-yellow'" x-text="a.level"></span>
+              <span class="text-sm" style="font-weight:600" x-text="a.title"></span>
+              <span class="text-xs text-muted" style="margin-left:auto" x-text="a.ts?.substring(11,19)"></span>
+            </div>
+            <div class="text-xs text-muted mt-4" x-text="a.detail"></div>
+          </div>
+        </template>
+      </div>
+    </template>
+    <p x-show="!monitorAlerts.length" class="text-muted text-sm">No alerts — all systems nominal</p>
+  </div>
+</section>
+"""
+
+# ---------------------------------------------------------------------------
 # JavaScript
 # ---------------------------------------------------------------------------
 ADMIN_JS = r"""
@@ -1658,8 +1789,8 @@ function adminApp(){return{
     {id:'channels',label:'Channels'},{id:'shell',label:'Shell'},
     {id:'config',label:'Config'},{id:'trust',label:'Trust'},
     {id:'costs',label:'Costs'},{id:'workflows',label:'Workflows'},
-    {id:'agents',label:'Agents'},{id:'advanced',label:'Advanced'},
-    {id:'scheduler',label:'Scheduler'}
+    {id:'agents',label:'Agents'},{id:'monitoring',label:'Monitoring'},
+    {id:'advanced',label:'Advanced'},{id:'scheduler',label:'Scheduler'}
   ],
   tab:location.hash.slice(1)||'analytics',
   token:localStorage.getItem('bt')||'',
@@ -1720,6 +1851,12 @@ function adminApp(){return{
   vdbMetrics:{totalChunks:0,totalDocs:0,docsStatus:''},
   ingestPipeline:{active:false,steps:[],detail:''},
   logLevelFilter:'ALL',chatActiveModel:'',
+  // --- Monitoring ---
+  monitorSnap:{},monitorHeatmap:[],monitorAlerts:[],resourceChart:null,
+  // --- Agent Internals ---
+  chatInternals:[],chatTraceSteps:[],
+  // --- Most Used Tools ---
+  mostUsedTools:[],mostUsedChart:null,agentAdvice:'',
 
   // === Lifecycle ===
   init(){
@@ -1755,6 +1892,7 @@ function adminApp(){return{
         case'costs':await this.loadCosts();break;
         case'workflows':await this.loadWorkflows();break;
         case'agents':await this.loadAgents();break;
+        case'monitoring':await this.loadMonitoring();break;
         case'advanced':if(!this.analytics.kg)await this.loadAnalytics();break;
       }
     }catch(e){console.error('loadTab error:',e)}
@@ -1769,7 +1907,7 @@ function adminApp(){return{
         this.api('/profile'),this.api('/knowledge-graph/stats'),this.api('/token-stats'),
         this.api('/working-memory'),this.api('/plugins'),this.api('/routes')]);
       this.health=h;this.analytics={cbs:cb,cache:ca,rates:ra,feedback:fb,ingest:ig,profile:pr,kg:kg,tokenStats:ts,wm:wm,plugins:pl,routes:ro};
-      this.loadRecentActivity();
+      this.loadRecentActivity();this.loadMostUsedTools();this.generateAdvice(ts);
       this.routes=ro;
       this.$nextTick(()=>this.updateCharts(ts,ca));
     }catch(e){console.error('loadAnalytics:',e)}
@@ -1870,12 +2008,9 @@ function adminApp(){return{
       let url='/admin/audit-log?limit=100&offset='+this.auditOffset;
       if(this.logMethodFilter)url+='&method='+this.logMethodFilter;
       if(this.logPathFilter)url+='&path_filter='+encodeURIComponent(this.logPathFilter);
+      if(this.logLevelFilter&&this.logLevelFilter!=='ALL')url+='&level='+this.logLevelFilter;
       const d=await this.api(url);
       this.auditLogs=d.entries||[];this.auditTotal=d.total||0;
-      if(this.logLevelFilter!=='ALL'){const lvl=this.logLevelFilter;
-        this.auditLogs=this.auditLogs.filter(e=>{
-          if(lvl==='ERROR')return e.status>=400;if(lvl==='WARNING')return e.status>=300&&e.status<400;
-          if(lvl==='INFO')return e.status>=200&&e.status<300;if(lvl==='DEBUG')return e.method==='GET';return true})}
     }catch(e){console.error(e)}
   },
 
@@ -1884,7 +2019,7 @@ function adminApp(){return{
     if(!this.chatInput.trim()||this.chatStreaming)return;
     const text=this.chatInput.trim();this.chatInput='';
     this.chatMessages.push({role:'user',content:text});
-    this.chatStreaming=true;this.chatStreamText='';this.chatSources=[];
+    this.chatStreaming=true;this.chatStreamText='';this.chatSources=[];this.chatInternals=[];this.chatTraceSteps=[];
     this.pipelineSteps=[{name:'classify',status:''},{name:'sentiment',status:''},{name:'hyde',status:''},
       {name:'compress',status:''},{name:'retrieve',status:''},{name:'generate',status:''},{name:'critique',status:''}];
     try{
@@ -1916,10 +2051,22 @@ function adminApp(){return{
       const phase=data.phase||data.status||'';
       const step=this.pipelineSteps.find(s=>phase.toLowerCase().includes(s.name));
       if(step){this.pipelineSteps.forEach(s=>{if(s.status==='active')s.status='done'});step.status='active'}
+      // Agent Internals capture
+      const detail=data.result?JSON.stringify(data.result).substring(0,120):(data.hyde_used!=null?'HyDE: '+data.hyde_used:'');
+      this.chatInternals.push({phase:data.phase||'',status:data.status||'',detail});
+      // AI Decision Trace
+      if(data.status==='done'&&data.result){
+        const traceStep={phase:data.phase,summary:''};
+        if(data.result.task_type)traceStep.summary='Task: '+data.result.task_type;
+        if(data.result.tone)traceStep.summary='Tone: '+data.result.tone;
+        if(data.result.confidence!=null){traceStep.confidence=data.result.confidence}
+        if(data.results_count!=null)traceStep.summary=data.results_count+' results retrieved';
+        this.chatTraceSteps.push(traceStep)}
     }else if(evt==='answer'){
       this.chatStreamText=data.text||'';
       if(data.sources)this.chatSources=data.sources;
       this.pipelineSteps.forEach(s=>{if(s.status)s.status='done'});
+      this.chatTraceSteps.push({phase:'answer',summary:'Response generated in '+(data.elapsed_seconds||0)+'s',confidence:null});
     }else if(evt==='done'){this.pipelineSteps.forEach(s=>{if(s.status)s.status='done'})}
   },
   renderMd(text){if(!text)return'';return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -2012,7 +2159,50 @@ function adminApp(){return{
       await this.loadDocuments()}catch(e){this.uploadStatus='Error: '+e.message;this.ingestPipeline.active=false}},
   async downloadLogs(){const blob=new Blob([JSON.stringify(this.auditLogs,null,2)],{type:'application/json'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='nanobot-logs.json';a.click()},
-  async clearChatSession(){this.chatMessages=[];this.chatStreamText='';this.chatSessionId='';this.chatSources=[];this.pipelineSteps=[]},
+  async clearChatSession(){this.chatMessages=[];this.chatStreamText='';this.chatSessionId='';this.chatSources=[];this.pipelineSteps=[];this.chatInternals=[];this.chatTraceSteps=[]},
+
+  // === Monitoring ===
+  async loadMonitoring(){
+    try{const[snap,hist,hm,al]=await Promise.all([
+      this.api('/api/metrics/snapshot'),this.api('/api/metrics/history'),
+      this.api('/api/metrics/heatmap'),this.api('/api/metrics/alerts')]);
+      this.monitorSnap=snap;this.monitorHeatmap=hm.slots||[];this.monitorAlerts=al.alerts||[];
+      this.$nextTick(()=>this.updateResourceChart(hist))}catch(e){console.error('loadMonitoring:',e)}},
+  updateResourceChart(hist){
+    const ctx=document.getElementById('resourceHistoryChart');
+    if(!ctx)return;if(this.resourceChart)this.resourceChart.destroy();
+    const cpuData=hist.cpu||[];const ramData=hist.ram||[];
+    const labels=cpuData.map(d=>d.t?.substring(11,16)||'');
+    this.resourceChart=new Chart(ctx,{type:'line',data:{labels,datasets:[
+      {label:'CPU %',data:cpuData.map(d=>d.v),borderColor:'rgba(138,76,252,.8)',backgroundColor:'rgba(138,76,252,.1)',fill:true,tension:.3},
+      {label:'RAM %',data:ramData.map(d=>d.v),borderColor:'rgba(83,221,252,.8)',backgroundColor:'rgba(83,221,252,.1)',fill:true,tension:.3}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#a3aac4',font:{family:'Space Grotesk'}}}},
+      scales:{x:{ticks:{color:'#a3aac4',font:{size:10}},grid:{color:'rgba(64,72,93,.1)'}},
+      y:{min:0,max:100,ticks:{color:'#a3aac4',callback:v=>v+'%'},grid:{color:'rgba(64,72,93,.1)'}}}}})},
+  formatUptime(s){if(!s)return'—';const d=Math.floor(s/86400);const h=Math.floor((s%86400)/3600);const m=Math.floor((s%3600)/60);
+    return(d?d+'d ':'')+(h?h+'h ':'')+(m?m+'m':'')},
+
+  // === Most Used Tools Chart ===
+  async loadMostUsedTools(){
+    try{const ts=await this.api('/token-stats');this.mostUsedTools=ts.by_endpoint||[];
+      this.$nextTick(()=>this.updateMostUsedChart())}catch(e){console.error(e)}},
+  updateMostUsedChart(){
+    const ctx=document.getElementById('mostUsedChart');
+    if(!ctx||!this.mostUsedTools.length)return;if(this.mostUsedChart)this.mostUsedChart.destroy();
+    const top=this.mostUsedTools.slice(0,8);
+    this.mostUsedChart=new Chart(ctx,{type:'bar',data:{
+      labels:top.map(t=>t.endpoint),datasets:[{label:'Calls',data:top.map(t=>t.calls),
+      backgroundColor:'rgba(138,76,252,.6)',borderRadius:4}]},
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:'#a3aac4'},grid:{color:'rgba(64,72,93,.1)'}},
+      y:{ticks:{color:'#a3aac4',font:{family:'JetBrains Mono',size:10}},grid:{display:false}}}}})},
+  generateAdvice(ts){
+    if(!ts||!ts.by_endpoint)return;this.agentAdvice='';
+    const total=ts.total_calls||0;const cost=ts.total_cost_usd||0;
+    const byEp=ts.by_endpoint||[];
+    if(cost>5)this.agentAdvice='High daily cost ($'+cost.toFixed(2)+'). Consider switching lower-cost models for embedding tasks.';
+    else if(total>500){const topEp=byEp[0];if(topEp&&topEp.calls>total*0.5)this.agentAdvice=topEp.endpoint+' accounts for '+Math.round(topEp.calls/total*100)+'% of all calls. Consider caching or batching these requests.'}
+    else if(byEp.length===1)this.agentAdvice='All traffic goes to a single endpoint. Consider diversifying routing for resilience.'},
 
   // === Trust (v10) ===
   async loadTrust(){
@@ -2672,6 +2862,7 @@ if ('serviceWorker' in navigator) {
 {SECTION_COSTS}
 {SECTION_WORKFLOWS}
 {SECTION_AGENTS}
+{SECTION_MONITORING}
 {SECTION_ADVANCED}
 {SECTION_SCHEDULER}
 </main>
