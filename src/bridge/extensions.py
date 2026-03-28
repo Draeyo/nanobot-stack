@@ -998,18 +998,25 @@ _ORCHESTRATOR_ENABLED = os.getenv("AGENT_ORCHESTRATOR_ENABLED", "false").lower()
 
 @router.get("/agent/status")
 def agent_status_endpoint(request: Request):
-    """List registered agents and their capabilities."""
+    """List registered agents (built-in + custom) and their capabilities."""
     if _verify_token: _verify_token(request)
     try:
         from agents import list_agents
-        return {"agents": list_agents(), "orchestrator_enabled": _is_orchestrator_enabled()}
+        built_in = list_agents()
     except Exception:
-        return {"agents": [], "orchestrator_enabled": False}
+        built_in = []
+    try:
+        from custom_agents import list_custom_agents
+        custom = [{"name": a["name"], "description": a["description"], "type": "custom",
+                    "forced_model": a.get("forced_model", ""), "enabled": bool(a.get("enabled", 1))}
+                   for a in list_custom_agents()]
+    except Exception:
+        custom = []
+    return {"agents": built_in + custom, "orchestrator_enabled": _is_orchestrator_enabled()}
 
 
 @router.get("/agent/history")
 def agent_history_endpoint(request: Request, limit: int = 50):
-    """Return recent agent execution history."""
     if _verify_token: _verify_token(request)
     return {"executions": list(_agent_history)[-limit:]}
 
@@ -1037,7 +1044,6 @@ def agent_run_endpoint(body: AgentRunIn, request: Request):
         agent = orch_cls(run_chat_fn=_run_chat_fn, tool_registry=tool_registry)
         result = asyncio.run(agent.run(body.task, body.context))
 
-        # Record in history
         from datetime import datetime, timezone
         _agent_history.append({
             "timestamp": datetime.now(timezone.utc).isoformat(),
@@ -1045,6 +1051,8 @@ def agent_run_endpoint(body: AgentRunIn, request: Request):
             "task": body.task[:200],
             "status": result.status,
             "tokens": result.cost_tokens,
+            "sub_agents": [{"agent": sr.get("agent", ""), "status": sr.get("status", "")}
+                           for sr in (result.actions_taken if isinstance(result.actions_taken, list) else [])],
         })
 
         return {
@@ -1053,10 +1061,62 @@ def agent_run_endpoint(body: AgentRunIn, request: Request):
             "output": result.output,
             "actions_taken": result.actions_taken,
             "cost_tokens": result.cost_tokens,
+            "sub_results": [{"status": sr.status, "output": sr.output[:500], "tokens": sr.cost_tokens}
+                            for sr in result.sub_results] if result.sub_results else [],
         }
     except Exception:
         logger.exception("Agent run failed")
         return {"ok": False, "error": "agent execution failed"}
+
+
+# --- Custom agent CRUD ---
+class CustomAgentIn(BaseModel):
+    name: str
+    description: str = ""
+    system_prompt: str = ""
+    forced_model: str = ""
+    tools: list[str] = []
+
+@router.get("/agent/custom")
+def list_custom_agents_endpoint(request: Request):
+    if _verify_token: _verify_token(request)
+    from custom_agents import list_custom_agents
+    return {"agents": list_custom_agents()}
+
+@router.post("/agent/custom")
+def create_custom_agent_endpoint(body: CustomAgentIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from custom_agents import create_custom_agent
+    agent = create_custom_agent(
+        name=body.name, description=body.description,
+        system_prompt=body.system_prompt, forced_model=body.forced_model,
+        tools=body.tools)
+    return {"ok": True, "agent": agent}
+
+@router.put("/agent/custom/{agent_id}")
+def update_custom_agent_endpoint(agent_id: str, body: CustomAgentIn, request: Request):
+    if _verify_token: _verify_token(request)
+    from custom_agents import update_custom_agent
+    agent = update_custom_agent(agent_id, name=body.name, description=body.description,
+                                system_prompt=body.system_prompt, forced_model=body.forced_model,
+                                tools=body.tools)
+    return {"ok": True, "agent": agent}
+
+@router.post("/agent/custom/{agent_id}/toggle")
+def toggle_custom_agent_endpoint(agent_id: str, request: Request):
+    if _verify_token: _verify_token(request)
+    from custom_agents import get_custom_agent, update_custom_agent
+    agent = get_custom_agent(agent_id)
+    if not agent:
+        return {"ok": False, "error": "not found"}
+    updated = update_custom_agent(agent_id, enabled=0 if agent["enabled"] else 1)
+    return {"ok": True, "agent": updated}
+
+@router.delete("/agent/custom/{agent_id}")
+def delete_custom_agent_endpoint(agent_id: str, request: Request):
+    if _verify_token: _verify_token(request)
+    from custom_agents import delete_custom_agent
+    return {"ok": delete_custom_agent(agent_id)}
 
 
 def _is_orchestrator_enabled() -> bool:

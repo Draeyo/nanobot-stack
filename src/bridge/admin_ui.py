@@ -1590,12 +1590,18 @@ SECTION_WORKFLOWS = """
 # ---------------------------------------------------------------------------
 SECTION_AGENTS = """
 <section x-show="tab==='agents'" x-cloak>
-  <h2 class="mb-12">Agent Status</h2>
-  <div class="grid">
-    <template x-for="a in agentList" :key="a.name">
+  <h2 class="mb-12">Agents & Sub-Agents</h2>
+
+  <!-- Built-in agents -->
+  <div class="text-xs text-muted mb-8" style="text-transform:uppercase;letter-spacing:.08em">Built-in Agents</div>
+  <div class="grid mb-16">
+    <template x-for="a in agentList.filter(a=>a.type!=='custom')" :key="a.name">
       <div class="card">
-        <h3 x-text="a.name" style="text-transform:none;font-size:0.875rem;color:var(--on-surface)"></h3>
-        <p class="text-xs text-muted mt-4" x-text="a.description"></p>
+        <div class="flex-between mb-4">
+          <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:0.875rem;color:var(--on-surface)" x-text="a.name"></span>
+          <span class="badge badge-muted">built-in</span>
+        </div>
+        <p class="text-xs text-muted" x-text="a.description"></p>
         <div class="mt-8 flex gap-8" x-show="a.tools?.length">
           <template x-for="t in (a.tools||[])" :key="t">
             <span class="badge badge-blue" x-text="t"></span>
@@ -1603,11 +1609,78 @@ SECTION_AGENTS = """
         </div>
       </div>
     </template>
-    <template x-if="!agentList?.length">
-      <div class="card"><p class="text-muted">No agents registered. Enable with AGENT_ORCHESTRATOR_ENABLED=true.</p></div>
-    </template>
   </div>
-  <div class="card mt-16">
+
+  <!-- Custom sub-agents -->
+  <div class="flex-between mb-8">
+    <div>
+      <div class="text-xs text-muted" style="text-transform:uppercase;letter-spacing:.08em">Custom Sub-Agents</div>
+      <p class="text-xs text-muted mt-4">Create specialized agents the orchestrator can delegate to automatically or on demand.</p>
+    </div>
+    <button class="btn btn-blue btn-sm" @click="showAgentForm=true;editingAgent=null;agentForm={name:'',description:'',system_prompt:'',forced_model:'',tools:[]}">+ New Sub-Agent</button>
+  </div>
+
+  <div class="grid mb-16">
+    <template x-for="a in customAgents" :key="a.id">
+      <div class="card" :style="!a.enabled?'opacity:0.5':''">
+        <div class="flex-between mb-4">
+          <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:0.875rem;color:var(--primary)" x-text="a.name"></span>
+          <div class="flex gap-8">
+            <span class="badge" :class="a.enabled?'badge-green':'badge-muted'" x-text="a.enabled?'active':'disabled'"></span>
+            <span class="badge badge-blue" x-show="a.forced_model" x-text="a.forced_model"></span>
+          </div>
+        </div>
+        <p class="text-xs text-muted mb-8" x-text="a.description"></p>
+        <div class="text-xs mono text-muted mb-8" x-show="a.system_prompt" x-text="a.system_prompt.substring(0,120)+'...'"></div>
+        <div class="flex gap-8">
+          <button class="btn btn-muted btn-sm" @click="editCustomAgent(a)">Edit</button>
+          <button class="btn btn-muted btn-sm" @click="toggleCustomAgent(a.id)">Toggle</button>
+          <button class="btn btn-red btn-sm" @click="deleteCustomAgent(a.id)">Delete</button>
+        </div>
+      </div>
+    </template>
+    <div class="card" x-show="!customAgents.length" style="border:2px dashed var(--ghost-border);text-align:center;padding:24px">
+      <p class="text-muted mb-8">No custom sub-agents yet</p>
+      <p class="text-xs text-muted">Create one to extend the orchestrator's capabilities.</p>
+    </div>
+  </div>
+
+  <!-- Agent create/edit form -->
+  <div class="card mb-16" x-show="showAgentForm" x-cloak>
+    <h3 x-text="editingAgent?'Edit Sub-Agent':'New Sub-Agent'"></h3>
+    <div class="form-row">
+      <label class="text-sm text-muted" style="width:120px">Name</label>
+      <input type="text" x-model="agentForm.name" placeholder="e.g. researcher, translator, code_reviewer" style="flex:1">
+    </div>
+    <div class="form-row">
+      <label class="text-sm text-muted" style="width:120px">Description</label>
+      <input type="text" x-model="agentForm.description" placeholder="One-line description of what this agent does" style="flex:1">
+    </div>
+    <div class="form-row">
+      <label class="text-sm text-muted" style="width:120px">Force Model</label>
+      <input type="text" x-model="agentForm.forced_model" placeholder="Leave empty for auto (e.g. gpt-4o, claude-sonnet-4-20250514)" style="flex:1">
+    </div>
+    <div style="margin-bottom:10px">
+      <label class="text-sm text-muted" style="display:block;margin-bottom:4px">System Prompt / Instructions</label>
+      <textarea x-model="agentForm.system_prompt" rows="6" style="font-family:'JetBrains Mono',monospace;font-size:12px"
+        placeholder="You are a specialized agent that..."></textarea>
+    </div>
+    <div style="margin-bottom:10px">
+      <label class="text-sm text-muted" style="display:block;margin-bottom:4px">Allowed Tools (select which tools this agent can use)</label>
+      <div class="flex gap-8" style="flex-wrap:wrap">
+        <template x-for="t in ['search_fn','ask_fn','remember_fn','shell_fn','web_fn','notify_fn']" :key="t">
+          <label class="text-xs"><input type="checkbox" :value="t" x-model="agentForm.tools"> <span x-text="t"></span></label>
+        </template>
+      </div>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn btn-blue btn-sm" @click="saveCustomAgent()">Save</button>
+      <button class="btn btn-muted btn-sm" @click="showAgentForm=false">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Execution history -->
+  <div class="card">
     <h3>Recent Executions</h3>
     <table class="tbl">
       <tr><th>Time</th><th>Agent</th><th>Task</th><th>Status</th><th>Tokens</th><th>Est. Cost</th></tr>
@@ -1997,7 +2070,8 @@ function adminApp(){return{
   workflows:[],
 
   // --- Agents (v10) ---
-  agentList:[],agentHistory:[],
+  agentList:[],agentHistory:[],customAgents:[],showAgentForm:false,editingAgent:null,
+  agentForm:{name:'',description:'',system_prompt:'',forced_model:'',tools:[]},
 
   // --- Advanced ---
   kgQuery:'',kgResult:null,piiText:'',piiResult:null,explainQuery:'',explainResult:null,
@@ -2446,8 +2520,22 @@ function adminApp(){return{
 
   // === Agents (v10) ===
   async loadAgents(){
-    try{const[s,h]=await Promise.all([this.api('/agent/status'),this.api('/agent/history')]);
-      this.agentList=s.agents||[];this.agentHistory=h.executions||[]}catch(e){console.error('loadAgents:',e)}},
+    try{const[s,h,c]=await Promise.all([this.api('/agent/status'),this.api('/agent/history'),this.api('/agent/custom')]);
+      this.agentList=s.agents||[];this.agentHistory=h.executions||[];this.customAgents=c.agents||[]}catch(e){console.error('loadAgents:',e)}},
+  editCustomAgent(a){this.editingAgent=a;this.agentForm={name:a.name,description:a.description,
+    system_prompt:a.system_prompt||'',forced_model:a.forced_model||'',
+    tools:typeof a.tools==='string'?JSON.parse(a.tools):a.tools||[]};this.showAgentForm=true},
+  async saveCustomAgent(){
+    if(!this.agentForm.name.trim())return alert('Name is required');
+    try{const url=this.editingAgent?'/agent/custom/'+this.editingAgent.id:'/agent/custom';
+      const method=this.editingAgent?'PUT':'POST';
+      await this.api(url,{method,body:this.agentForm});
+      this.showAgentForm=false;await this.loadAgents()}catch(e){alert('Error: '+e.message)}},
+  async toggleCustomAgent(id){
+    try{await this.api('/agent/custom/'+id+'/toggle',{method:'POST'});await this.loadAgents()}catch(e){alert('Error: '+e.message)}},
+  async deleteCustomAgent(id){
+    if(!confirm('Delete this sub-agent?'))return;
+    try{await this.api('/agent/custom/'+id,{method:'DELETE'});await this.loadAgents()}catch(e){alert('Error: '+e.message)}},
   estimateAgentCost(tokens){
     if(!tokens)return'\u2014';
     const cost=(tokens/1000)*0.003;
