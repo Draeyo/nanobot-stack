@@ -181,17 +181,22 @@ Internet
 
 - Langfuse tracing on all LLM calls (cost, latency, token usage)
 - Prometheus metrics at `/metrics`
-- **Admin UI** at `/admin` — unified management console with 10 sections (analytics, settings, tools, vector DB, logs, chat, channels, shell, config, advanced)
+- **Admin UI** at `/admin` — unified management console with 16 tabs (analytics, model config, skills & tools, knowledge base, system logs, chat playground, channels, shell, config, trust policies, cost dashboard, workflows, agents, monitoring, advanced, scheduler) — built with the "Neon Observatory" design system
+- **Server monitoring** — CPU, RAM, disk, network via psutil with 60-min history charts, 24h load heatmap, and auto-alerts
 - Real-time HTML dashboard at `/dashboard`
-- Structured JSON logging for SIEM integration
-- Append-only audit log (who called what, when)
+- **OpenAPI docs** at `/docs` and `/redoc` — interactive API documentation
+- Structured JSON logging with **X-Request-ID** correlation across requests
+- Append-only audit log with log-level filtering (INFO/WARNING/ERROR/DEBUG)
 </details>
 
 <details>
 <summary><strong>Security</strong> — Production-grade hardening</summary>
 
 - All services bind to localhost (127.0.0.1) — public access only through Traefik
-- Authentication via Authentik ForwardAuth (SSO) + per-request bridge token
+- **CORS protection** — deny by default, configurable via `CORS_ORIGINS` env var
+- Authentication via Authentik ForwardAuth (SSO) + per-request bridge token (timing-safe `hmac.compare_digest`)
+- **Request size limits** — all Pydantic models enforce `max_length` constraints
+- **Per-user rate limiting** — token-bucket rate limiter tracks by IP/user header
 - **DM pairing gate**: channel users (Telegram, Discord, WhatsApp) must be approved by the admin before interacting
 - **PII auto-detection**: emails, phones, SSNs, API keys, credit cards scanned and redacted before storage
 - **Approval-gated shell**: system-modifying commands require explicit user approval before execution
@@ -237,27 +242,51 @@ You also need:
 
 ## Quick start
 
+### Option A — Docker (recommended)
+
 ```bash
-# 1. Clone the repository
 git clone https://github.com/Draeyo/nanobot-stack.git
 cd nanobot-stack
 
-# 2. Create your configuration file
-cp stack.env.example stack.env
-nano stack.env
-# At minimum, set: DOMAIN="yourdomain.com"
+# Configure
+cp stack.env.example .env
+nano .env   # Set DOMAIN, API keys, etc.
 
-# 3. Deploy (takes 5-10 minutes on first run)
+# Start everything
+docker compose up -d
+
+# Verify
+curl http://127.0.0.1:8000/healthz | jq .
+```
+
+Your assistant is live at `http://127.0.0.1:8000/admin`. Add Traefik for HTTPS.
+
+Optional overlays:
+```bash
+# With voice (Piper TTS + Whisper STT)
+docker compose -f docker-compose.yml -f docker-compose.voice.yml up -d
+
+# With web search (SearXNG)
+docker compose -f docker-compose.yml -f docker-compose.searxng.yml up -d
+```
+
+### Option B — Bare metal (systemd)
+
+```bash
+git clone https://github.com/Draeyo/nanobot-stack.git
+cd nanobot-stack
+
+cp stack.env.example stack.env
+nano stack.env   # At minimum, set: DOMAIN="yourdomain.com"
+
+# Deploy (installs everything: Qdrant, Python venvs, Ollama, systemd services)
 sudo ./deploy.sh
 
-# 4. Add your LLM API keys
+# Add your LLM API keys
 sudo nano /opt/nanobot-stack/rag-bridge/.env
-# Set at least one of: OPENAI_API_KEY, ANTHROPIC_API_KEY, or OPENROUTER_API_KEY
-
 sudo nano /opt/nanobot-stack/nanobot/config/.env
-# Same keys here
 
-# 5. Restart and test
+# Restart and test
 sudo systemctl restart nanobot-rag nanobot
 nanobot-stack-selftest
 ```
@@ -589,79 +618,28 @@ ADMIN_UI_ENABLED=false
 
 Then restart: `sudo systemctl restart nanobot-rag`
 
-### Sections
+### Tabs overview
 
-The admin UI has 10 tabs:
+The admin UI has **16 tabs**, built with the "Neon Observatory" design system (tonal dark surfaces, Manrope/Inter/Space Grotesk/JetBrains Mono fonts, glassmorphism modals, gradient CTAs):
 
-#### 1. Analytics
-
-Real-time system dashboard merged from the legacy `/dashboard`. Shows:
-- Health status, circuit breaker states, cache hit rates, rate limiter state
-- Token usage chart (by model) and cache performance chart
-- Working memory sessions, loaded plugins, model route table
-- Auto-refresh toggle (30s interval)
-
-#### 2. Settings
-
-Centralized view of all ~80 configurable parameters grouped by section (domain, system, network, models, RAG tuning, tools, channels, etc.):
-- Current value (sensitive values are masked), default, description
-- Inline editing: modify a value and click "Propose Change"
-- Changes go through the **Config Writer** approval workflow — they are validated, staged, and diffed before being applied
-- Requires `CONFIG_WRITER_ENABLED=true` for write operations
-
-#### 3. Tools & Routing
-
-- **Plugins**: lists loaded plugins with tool count and hook count
-- **Plugin tools**: expandable list with a "Test" button to invoke any tool with JSON parameters
-- **Model routing**: task → model chain table, route preview form to test classification
-
-#### 4. Vector DB
-
-- **Collections overview**: all Qdrant collections with point counts and status
-- **Search tester**: run a query against selected collections, see results with relevance scores
-- **Collection browser**: scroll through individual points with payload preview
-
-#### 5. Logs
-
-- **Audit log viewer**: timestamps, HTTP methods, paths, status codes, IPs, response times
-- Filters: by method (GET/POST/...), path substring, status range
-- Paginated with configurable limit
-
-#### 6. Chat
-
-- Full chat interface with SSE streaming
-- Pipeline progress sidebar showing each step in real time (classify, HyDE, retrieve, rerank, generate...)
-- Toggle switches: auto-classify, HyDE, citations, self-critique
-- Session ID support for multi-turn conversations
-- Source panel when citations are returned
-
-#### 7. Channels
-
-- **Adapter status cards**: Telegram, Discord, WhatsApp — configured/running/error
-- **DM pairing management**: pending pairing requests with approve/reject buttons
-- **Approved users**: list of all approved channel users with revoke option
-- DM policy indicator (pairing mode vs open mode)
-
-#### 8. Elevated Shell
-
-- **Command allowlist**: reference table of all permitted commands (default + user-added)
-- **Pending actions**: proposed system commands awaiting approval
-- **Action history**: all past actions with status, stdout/stderr, return codes
-- **Propose form**: submit a new command for approval
-
-#### 9. Config Writer
-
-- **Pending changes**: proposed configuration modifications awaiting review
-- **Diff viewer**: syntax-colored unified diff (green = added, red = removed)
-- **Change history**: all past changes with status
-- **Rollback**: one-click rollback for previously applied changes
-
-#### 10. Advanced
-
-- **Knowledge Graph Explorer**: entity search and relation finder
-- **PII Scanner**: paste text to detect and classify personal data
-- **Pipeline Explainer**: run a query and see the full pipeline trace (classification, routing, retrieval, timing)
-- **Working Memory**: session statistics and context tracking
+| Tab | Key features |
+|-----|-------------|
+| **Analytics** | System pulse, token consumption, circuit breakers, caches, rate limits, token usage & cache charts, most used tools chart, agent activity feed, agent advice recommendations, export report |
+| **Model Configuration** | Temperature/Top-P/Max Tokens visual sliders, tool execution toggle, knowledge base selector, system prompt editor (markdown), reset defaults, test configuration (selftest) |
+| **Skills & Tools** | Visual plugin cards grid with status badges, model routing table, route preview, performance metrics (token cost 24h, total calls, models active) |
+| **Knowledge Base** | Health badge, metrics cards (chunks/collections/documents), drag-and-drop upload zone, indexing pipeline visualization (UPLOAD→CHUNK→EMBED→STORE→SYNC), documents table with status/delete/pagination, collection browser, search tester |
+| **System Logs** | Log level filter buttons (ALL/INFO/WARNING/ERROR/DEBUG), method/path filters, download JSON export, connection status, paginated audit viewer |
+| **Chat Playground** | Active model display, SSE streaming with pipeline progress, formatting toolbar, agent internals panel (SSE events captured live), AI decision trace timeline with confidence scores, session controls, voice interface |
+| **Channels** | Adapter status cards (Telegram/Discord/WhatsApp), DM pairing management, approved users list |
+| **Elevated Shell** | Command allowlist, pending actions with approve/reject, action history, propose form |
+| **Config Writer** | Pending changes, syntax-colored diff viewer, change history with rollback |
+| **Trust Policies** | Trust level dropdowns per action type, auto-promote threshold controls, trust audit log with cancel button for pending entries |
+| **Cost Dashboard** | Daily budget gauge with progress bar, budget pressure indicator, 7-day cost history chart, usage by model table |
+| **Procedural Workflows** | Learned workflow patterns with toggle/delete, confidence scores, frequency counts |
+| **Agent Status** | Registered agent cards with tool badges, execution history with estimated cost per run |
+| **Monitoring** | CPU/RAM/Disk/Network cards with progress bars, live 60-min resource history chart, 24h system load heatmap, critical alerts list |
+| **Advanced** | Knowledge Graph Explorer, PII Scanner, Pipeline Explainer, Working Memory stats |
+| **Scheduler** | Job list with cron/status/history, create/edit form with section checkboxes and channel selection, manual trigger |
 
 ## Usage
 
@@ -789,13 +767,25 @@ The built-in backup system handles everything automatically. A daily cron job at
 Trigger a manual backup via the API:
 
 ```bash
-curl -X POST http://127.0.0.1:8089/api/backup/trigger \
+curl -X POST http://127.0.0.1:8000/api/backup/run \
   -H "X-Bridge-Token: $TOKEN"
 ```
 
-Or restore from an existing archive:
+Verify backup integrity:
 
 ```bash
+curl -X POST http://127.0.0.1:8000/api/backup/verify/{backup_id} \
+  -H "X-Bridge-Token: $TOKEN"
+```
+
+Restore from an existing archive:
+
+```bash
+# Via API
+curl -X POST http://127.0.0.1:8000/api/backup/restore/{backup_id} \
+  -H "X-Bridge-Token: $TOKEN"
+
+# Or via script
 scripts/restore.sh /path/to/backup.tar.gz.enc
 ```
 
@@ -884,43 +874,68 @@ df -h /usr/share/ollama
 
 ```
 nanobot-stack/
-├── .gitignore                    # Excludes secrets, caches, state
-├── stack.env.example             # Configuration template
-├── lib.sh                        # Shared functions & defaults
-├── deploy.sh                     # First-time installer
+├── docker-compose.yml            # Main stack (bridge + Qdrant + Traefik)
+├── docker-compose.voice.yml      # Voice overlay (Piper + Whisper)
+├── docker-compose.searxng.yml    # Web search overlay
+├── CLAUDE.md                     # Developer guide & conventions
+├── stack.env.example             # Configuration template (50+ variables)
+├── deploy.sh                     # Bare-metal installer (systemd)
 ├── update.sh                     # Fast updater
 ├── rotate-secrets.sh             # Secret rotation
 ├── src/
-│   ├── bridge/                   # RAG bridge (32 Python modules)
+│   ├── bridge/                   # RAG bridge (45+ Python modules)
+│   │   ├── Dockerfile            # Container build
+│   │   ├── app.py                # FastAPI core (133 routes)
+│   │   ├── admin_ui.py           # Admin SPA (129KB, 16 tabs)
+│   │   ├── system_metrics.py     # psutil monitoring
+│   │   └── static/               # PWA assets (manifest, sw.js, icons)
 │   ├── mcp/                      # MCP server (26 tools for the agent)
-│   └── config/                   # Default configs (model_router.json, policy prompt)
+│   └── config/                   # Default configs (model_router.json)
+├── tests/                        # 33 test files, 518+ tests
+├── migrations/                   # Idempotent DB migrations
+├── .github/workflows/            # CI (tests, pylint, CodeQL, Codacy)
 ├── systemd/                      # Service definitions (.template)
 ├── traefik/                      # Reverse proxy config (.template)
-├── scripts/                      # Helper scripts (.template)
 └── docs/
-    └── REFERENCE.md              # Full API & endpoint reference
+    ├── REFERENCE.md              # API & endpoint reference
+    └── superpowers/              # Design specs & implementation plans
 ```
 
 ## Roadmap
 
-Full specs and implementation plans in [`docs/superpowers/`](docs/superpowers/).
+All v10 features and 13 sub-projects are **merged on main** and production-ready. Design specs and implementation plans are archived in [`docs/superpowers/`](docs/superpowers/).
 
-### In progress — PRs open, pending merge
+### Completed (v10)
 
-| Feature | Branch | Description |
-|---------|--------|-------------|
-| **Web Search (Sub-D)** | `feature/sub-d-web-search` | Self-hosted SearXNG integration — private search, results cached in Qdrant 6h TTL, `web_digest` in morning briefing |
-| **Local Document Ingestion (Sub-E)** | `feature/sub-e-local-docs` | Watchdog-monitored folder — PDF, Markdown, DOCX, TXT ingested automatically; dedup by file hash |
-| **PWA Mobile (Sub-I)** | `feature/sub-i-pwa` | Installable web app — Web Push notifications, offline fallback, responsive mobile chat UI |
-| **Developer Integrations (Sub-J)** | `feature/sub-j-dev-integrations` | GitHub PR/issue/commit sync, Obsidian vault ingestion with WikiLink resolution, daily dev digest in briefing |
-| **Browser Automation (Sub-K)** | `feature/sub-k-browser-automation` | Playwright BrowserAgent — headless Chromium, trust-gated fill/submit, domain allowlist, ephemeral sessions |
-| **Encryption At-Rest (Sub-L)** | `feature/sub-l-encryption-at-rest` | AES-256-GCM field-level encryption for Qdrant payloads and SQLite columns; HKDF domain keys; live key rotation |
+| Feature | Status |
+|---------|--------|
+| Trust Engine (4 levels, auto-promotion, audit) | Merged |
+| Procedural Memory (workflow learning, replay) | Merged |
+| Token Budget + Adaptive Routing with budget pressure | Merged |
+| Sub-Agents (orchestrator + ops) | Merged |
+| Semantic Cache (L2 Qdrant, cosine > 0.92) | Merged |
+| Scheduler + Morning Briefing (6 sections) | Merged |
+| Email/Calendar sync (IMAP + CalDAV) | Merged |
+| RSS/News ingestion (auto-summarize) | Merged |
+| Web Search (SearXNG, Qdrant cache) | Merged |
+| Local Document Ingestion (watchdog, dedup) | Merged |
+| Backup & Restore (encrypted, S3) | Merged |
+| Voice Interface (Whisper STT + Piper TTS) | Merged |
+| PWA Mobile (service worker, push, offline) | Merged |
+| Dev Integrations (GitHub, Obsidian) | Merged |
+| Browser Automation (Playwright, trust-gated) | Merged |
+| Encryption At-Rest (AES-256-GCM, key rotation) | Merged |
+| Admin UI — Neon Observatory design + 50 features | Merged |
+| Production hardening (Docker, CI, CORS, auth, deps) | Merged |
 
-### Planned
+### Future ideas
 
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **Admin UI v2** | Trust policies tab, cost dashboard with Chart.js projections, procedural workflows tab, agent status tab | High |
+| Feature | Description |
+|---------|-------------|
+| Tool CRUD API | Create/edit/delete tools from the admin UI |
+| Multi-node monitoring | Distributed node status for clustered deployments |
+| Grafana dashboards | Pre-built dashboards for Prometheus metrics |
+| OpenTelemetry tracing | Distributed tracing across services |
 
 ## Contributing
 
