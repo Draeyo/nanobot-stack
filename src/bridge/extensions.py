@@ -938,6 +938,24 @@ def channel_status_endpoint(request: Request):
         return {"error": "Failed to retrieve channel status", "channels": {}}
 
 
+@router.post("/channels/test")
+async def channel_test_endpoint(request: Request):
+    """Send a test message via a specific channel's broadcast notifier."""
+    if _verify_token: _verify_token(request)
+    body = await request.json()
+    channel = body.get("channel", "")
+    message = body.get("message", "Test from nanobot admin")
+    try:
+        from broadcast_notifier import BroadcastNotifier
+        from channels import channel_manager
+        notifier = BroadcastNotifier(channel_manager=channel_manager)
+        result = await notifier.broadcast([channel], message)
+        return {"ok": result.get(channel, False), "channel": channel, "result": result}
+    except Exception as exc:
+        logger.exception("Channel test failed for %s", channel)
+        return {"ok": False, "error": str(exc)}
+
+
 # --------------------------------------------------------------------------
 # v10: Procedural Workflows
 # --------------------------------------------------------------------------

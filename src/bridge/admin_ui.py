@@ -1074,10 +1074,17 @@ SECTION_CHANNELS = """
   <div class="grid mb-16">
     <template x-for="(info,name) in channelStatus" :key="name">
       <div class="card">
-        <h3 x-text="name"></h3>
-        <span class="badge" :class="info.running?'badge-green':'badge-muted'" x-text="info.running?'running':'stopped'"></span>
-        <span class="badge badge-blue" x-show="info.configured">configured</span>
-        <div class="text-sm text-red mt-8" x-show="info.error" x-text="info.error"></div>
+        <div class="flex-between mb-8">
+          <h3 x-text="name"></h3>
+          <div class="flex gap-8">
+            <span class="badge" :class="info.running?'badge-green':'badge-muted'" x-text="info.running?'running':'stopped'"></span>
+            <span class="badge badge-blue" x-show="info.configured">configured</span>
+          </div>
+        </div>
+        <div class="text-sm text-red mb-8" x-show="info.error" x-text="info.error"></div>
+        <button class="btn btn-muted btn-sm" x-show="info.running"
+          @click="sendTestMessage(name)">Send Test</button>
+        <span class="text-xs text-green" x-show="channelTestResult[name]" x-text="channelTestResult[name]"></span>
       </div>
     </template>
     <div class="card" x-show="!Object.keys(channelStatus||{}).length">
@@ -1819,7 +1826,7 @@ function adminApp(){return{
   pipelineSteps:[],
 
   // --- Channels ---
-  channelStatus:{},pendingPairings:[],approvedUsers:[],dmPolicy:'pairing',
+  channelStatus:{},pendingPairings:[],approvedUsers:[],dmPolicy:'pairing',channelTestResult:{},
 
   // --- Shell ---
   pendingActions:[],actionHistory:[],elevatedCommands:{},proposeCmd:'',proposeDesc:'',proposeResult:'',
@@ -2083,6 +2090,10 @@ function adminApp(){return{
   },
   async approvePairing(code){try{await this.api('/channels/pair/'+code+'/approve',{method:'POST',body:{}});await this.loadChannels()}catch(e){alert('Error: '+e.message)}},
   async rejectPairing(code){try{await this.api('/channels/pair/'+code+'/reject',{method:'POST',body:{}});await this.loadChannels()}catch(e){alert('Error: '+e.message)}},
+  async sendTestMessage(channel){
+    this.channelTestResult[channel]='Sending...';
+    try{const r=await this.api('/channels/test',{method:'POST',body:{channel,message:'Test message from nanobot admin UI'}});
+      this.channelTestResult[channel]=r.ok?'Sent!':'Failed: '+(r.error||'unknown')}catch(e){this.channelTestResult[channel]='Error: '+e.message}},
   async revokeUser(pid){if(!confirm('Revoke access for '+pid+'?'))return;
     try{await this.api('/channels/pair/revoke',{method:'POST',body:{platform_id:pid}});await this.loadChannels()}catch(e){alert('Error: '+e.message)}},
 

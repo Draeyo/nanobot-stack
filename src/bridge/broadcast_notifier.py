@@ -4,11 +4,15 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import time
 from typing import Any
 
 logger = logging.getLogger("rag-bridge.broadcast_notifier")
 
 VALID_CHANNELS = frozenset({"ntfy", "telegram", "discord", "whatsapp", "webpush"})
+
+# Rate limit: max 1 broadcast per N seconds (prevents accidental spam)
+BROADCAST_MIN_INTERVAL = float(os.getenv("BROADCAST_MIN_INTERVAL_SEC", "10"))
 
 
 class BroadcastNotifier:
@@ -23,9 +27,16 @@ class BroadcastNotifier:
     def __init__(self, channel_manager: Any, push_manager: Any = None) -> None:
         self._channel_manager = channel_manager
         self._push_manager = push_manager
+        self._last_broadcast: float = 0.0
 
     async def broadcast(self, channels: list[str], message: str) -> dict[str, bool]:
         """Send message to each channel. Returns {channel: success}."""
+        now = time.monotonic()
+        if now - self._last_broadcast < BROADCAST_MIN_INTERVAL:
+            logger.warning("Broadcast rate-limited (min interval: %.0fs)", BROADCAST_MIN_INTERVAL)
+            return {ch: False for ch in channels}
+        self._last_broadcast = now
+
         tasks: dict[str, Any] = {}
         for ch in channels:
             if ch in VALID_CHANNELS:

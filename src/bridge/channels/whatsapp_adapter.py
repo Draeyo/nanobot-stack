@@ -39,6 +39,11 @@ class WhatsAppAdapter(ChannelAdapter):
 
     async def start(self) -> None:
         global _adapter_instance
+        if not WHATSAPP_APP_SECRET:
+            logger.warning("WHATSAPP_APP_SECRET not set — webhook signature verification DISABLED. "
+                           "Set it to secure your WhatsApp webhook endpoint.")
+        if not WHATSAPP_VERIFY_TOKEN:
+            logger.warning("WHATSAPP_VERIFY_TOKEN not set — webhook challenge verification will fail.")
         _adapter_instance = self
         logger.info("WhatsApp adapter ready (webhook-based at /webhooks/whatsapp)")
 
@@ -72,7 +77,8 @@ class WhatsAppAdapter(ChannelAdapter):
 def _verify_signature(body: bytes, signature: str) -> bool:
     """Verify webhook payload signature using app secret."""
     if not WHATSAPP_APP_SECRET:
-        return True  # skip if not configured
+        logger.debug("Signature verification skipped — WHATSAPP_APP_SECRET not configured")
+        return True
     expected = hmac.new(
         WHATSAPP_APP_SECRET.encode(), body, hashlib.sha256
     ).hexdigest()

@@ -133,6 +133,10 @@ class ChannelManager:
                 task.cancel()
         self._tasks.clear()
 
+    def get_adapter(self, name: str) -> ChannelAdapter | None:
+        """Return a registered adapter by name, or None."""
+        return self._adapters.get(name)
+
     def status(self) -> dict[str, Any]:
         """Return status of all registered adapters."""
         result = {}
