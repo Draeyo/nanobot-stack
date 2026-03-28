@@ -557,6 +557,60 @@ SECTION_TOOLS = """
     </div>
   </div>
 
+  <!-- Tool inventory -->
+  <div class="card mb-16">
+    <div class="flex-between mb-8">
+      <h3>Tool Inventory</h3>
+      <span class="badge badge-blue" x-text="(plugins.tools||[]).length+' plugin tools + 6 built-in'"></span>
+    </div>
+
+    <!-- Built-in tools -->
+    <div class="text-xs text-muted mb-8" style="text-transform:uppercase;letter-spacing:.08em">Built-in Tools</div>
+    <div class="grid mb-12" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+      <template x-for="t in builtinTools" :key="t.name">
+        <div style="padding:8px 12px;background:var(--surface-container-low);border-radius:6px">
+          <div class="mono text-sm" x-text="t.name"></div>
+          <div class="text-xs text-muted" x-text="t.desc"></div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Plugin tools -->
+    <template x-if="(plugins.tools||[]).length">
+      <div>
+        <div class="text-xs text-muted mb-8" style="text-transform:uppercase;letter-spacing:.08em">Plugin Tools</div>
+        <table class="tbl">
+          <thead><tr><th>Tool</th><th>Plugin</th><th>Description</th><th></th></tr></thead>
+          <tbody>
+            <template x-for="t in (plugins.tools||[])" :key="t.name">
+              <tr>
+                <td class="mono" x-text="t.name"></td>
+                <td><span class="badge badge-blue" x-text="t.plugin"></span></td>
+                <td class="text-xs text-muted" x-text="t.description"></td>
+                <td><button class="btn btn-muted btn-sm" @click="toolTestName=t.name;toolTestParams='{}';toolTestResult=null">Test</button></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </template>
+  </div>
+
+  <!-- Tool tester -->
+  <div class="card mb-16" x-show="toolTestName">
+    <div class="flex-between mb-8">
+      <h3 x-text="'Test: '+toolTestName"></h3>
+      <button class="btn btn-muted btn-sm" @click="toolTestName=''">Close</button>
+    </div>
+    <textarea x-model="toolTestParams" rows="3" placeholder='{"param": "value"}' style="font-family:'JetBrains Mono',monospace;font-size:12px"></textarea>
+    <div class="flex gap-8 mt-8">
+      <button class="btn btn-blue btn-sm" @click="runToolTest()">Run</button>
+    </div>
+    <template x-if="toolTestResult">
+      <div class="pre-wrap mt-8" x-text="JSON.stringify(toolTestResult,null,2)"></div>
+    </template>
+  </div>
+
   <!-- Performance metrics -->
   <div class="grid mb-16">
     <div class="card"><h3>Token Cost (24h)</h3>
@@ -1953,6 +2007,14 @@ function adminApp(){return{
   modelTemp:0.7,modelTopP:0.9,modelMaxTokens:4096,modelToolUse:true,testConfigResult:'',
   systemPrompt:'',selectedKB:'',kbCollections:[],
   toolStats:{totalCost:0,totalCalls:0,modelsActive:0},
+  toolTestName:'',toolTestParams:'{}',toolTestResult:null,
+  builtinTools:[
+    {name:'search_fn',desc:'Semantic search across all collections'},
+    {name:'ask_fn',desc:'Search + LLM answer in one call'},
+    {name:'remember_fn',desc:'Store a memory in Qdrant'},
+    {name:'shell_fn',desc:'Run an approved shell command'},
+    {name:'web_fn',desc:'Fetch and extract text from a URL'},
+    {name:'notify_fn',desc:'Send a notification via webhook'}],
   docsList:[],docsTotal:0,docsOffset:0,docSearchFilter:'',uploadStatus:'',
   vdbMetrics:{totalChunks:0,totalDocs:0,docsStatus:''},
   ingestPipeline:{active:false,steps:[],detail:''},
@@ -2084,6 +2146,11 @@ function adminApp(){return{
           modelsActive:Object.keys(bm).length}}catch(e){}
     }catch(e){console.error('loadTools:',e)}
   },
+  async runToolTest(){
+    if(!this.toolTestName)return;this.toolTestResult=null;
+    try{const params=JSON.parse(this.toolTestParams||'{}');
+      this.toolTestResult=await this.api('/plugin-tool',{method:'POST',body:{tool_name:this.toolTestName,params}})
+    }catch(e){this.toolTestResult={error:e.message}}},
   async previewRoute(){
     if(!this.routePreviewTask)return;
     try{this.routePreviewResult=await this.api('/route-preview',{method:'POST',body:{task_type:this.routePreviewTask}})}catch(e){console.error(e)}
