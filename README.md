@@ -22,10 +22,11 @@
 
 ## What is this?
 
-**nanobot-stack** is a one-command deployment script that sets up a complete, self-hosted AI assistant on your own server. Think of it as your private AI that:
+**nanobot-stack** is a self-hosted AI assistant that lives on your own server and talks to you wherever you are. Think of it as your private AI that:
 
+- **Talks to you on WhatsApp, Telegram, Discord** — Scan a QR code to connect your WhatsApp. Message your bot on Telegram or Discord. All channels share the same conversation — start on one, continue on another.
 - **Remembers everything** — It stores facts, decisions, and conversations in a vector database and recalls them automatically when relevant.
-- **Routes to the best model** — It picks the cheapest model that can handle each task (a quick rewrite doesn't need GPT-4) and falls back to alternatives if one provider is down. An adaptive router learns from feedback to improve routing over time.
+- **Routes to the best model** — It picks the cheapest model that can handle each task (a quick rewrite doesn't need GPT-4) and falls back to alternatives if one provider is down. An adaptive router learns from feedback over time.
 - **Uses tools** — It can run shell commands, fetch web pages, send notifications, execute code in a sandbox, and run multi-step plans with parallel execution.
 - **Understands context deeply** — HyDE query rewriting, knowledge graph relationships, sentiment detection, inline citations, and self-critique produce higher-quality answers.
 - **Works offline** — An optional local model (Ollama) keeps things running when your internet connection drops.
@@ -37,57 +38,72 @@ It bundles together several open-source projects into a cohesive stack:
 |-----------|------|
 | [nanobot](https://github.com/nanobot-ai/nanobot) | AI agent gateway (the "brain") |
 | [Qdrant](https://qdrant.tech/) | Vector database (the "memory") |
-| **RAG bridge** (included) | FastAPI service that connects everything — search, embeddings, model routing, tools |
+| **RAG bridge** (included) | FastAPI service that connects everything — search, embeddings, model routing, channels, tools |
+| [WAHA](https://waha.devlike.pro/) | WhatsApp Web bridge — connect your own phone number via QR code (optional) |
 | [Langfuse](https://langfuse.com/) | Observability and tracing (the "dashboard") |
 | [Ollama](https://ollama.com/) | Local model runner for offline fallback (optional) |
-| [Traefik](https://traefik.io/) | Reverse proxy with automatic TLS (you bring this) |
-| [Authentik](https://goauthentik.io/) | SSO and authentication (you bring this) |
+| [Traefik](https://traefik.io/) | Reverse proxy with automatic TLS (you bring this, or use the built-in one) |
+| [Authentik](https://goauthentik.io/) | SSO and authentication (optional) |
 
 ## Architecture
 
 ```
-Internet
-    │
-    ▼
-┌─────────────────────────────────────────────────┐
-│  Traefik (HTTPS, TLS certificates, auth)        │
-│  ai.yourdomain.com   rag.yourdomain.com   ...   │
-└──────┬─────────────┬──────────────┬─────────────┘
-       │             │              │
-       ▼             ▼              ▼
-  ┌─────────┐  ┌───────────┐  ┌──────────┐
-  │ nanobot │  │ RAG bridge│  │ Langfuse │
-  │ (agent) │◄─│ (FastAPI) │  │ (traces) │
-  └────┬────┘  └─┬───┬───┬─┘  └──────────┘
-       │  MCP    │   │   │
-       └─────────┘   │   ├──► Restricted shell
-                     │   ├──► Code interpreter (sandbox)
-                     │   ├──► Web fetcher
-                     │   ├──► Webhook notifications
-                     │   └──► Plugin system
-                     ▼
-   ┌──────────┐ ┌────────────┐ ┌─────────┐
-   │Knowledge │ │  Qdrant    │ │ Ollama  │
-   │  Graph   │ │  (vector   │ │ (local  │
-   │ (SQLite) │ │  database) │ │ models) │
-   └──────────┘ └────────────┘ └─────────┘
+         WhatsApp     Telegram     Discord        Web UI / API
+         (WAHA)       (polling)    (websocket)    (admin, PWA)
+            │             │            │               │
+            └──────┬──────┘──────┬─────┘               │
+                   ▼             ▼                     ▼
+              ┌─────────────────────────────────────────────┐
+              │  Traefik (HTTPS, TLS, Authentik SSO)        │
+              │  ai.yourdomain.com  rag.yourdomain.com      │
+              └──────────────────┬──────────────────────────┘
+                                 │
+                                 ▼
+              ┌──────────────────────────────────────┐
+              │        RAG Bridge (FastAPI)           │
+              │                                      │
+              │  ┌────────────┐  ┌───────────────┐   │
+              │  │  Channels  │  │  Smart-Chat   │   │
+              │  │  Manager   │  │  Pipeline     │   │
+              │  │ (unified   │  │  (classify →  │   │
+              │  │  sessions) │  │  HyDE → RAG → │   │
+              │  └──────┬─────┘  │  generate →   │   │
+              │         │        │  critique)    │   │
+              │         └───────►│               │   │
+              │                  └───────┬───────┘   │
+              │                          │           │
+              │  ┌───────┐ ┌─────────┐ ┌─┴────────┐ │
+              │  │ Trust │ │ Budget  │ │ Adaptive │ │
+              │  │Engine │ │Tracker  │ │ Router   │ │
+              │  └───────┘ └─────────┘ └──────────┘ │
+              │                                      │
+              │  Tools: shell, code, web, planner,   │
+              │         plugins, notifications       │
+              └──┬────────┬────────┬─────────────────┘
+                 │        │        │
+                 ▼        ▼        ▼
+          ┌──────────┐ ┌──────┐ ┌─────────┐ ┌──────────┐
+          │  Qdrant  │ │SQLite│ │ Ollama  │ │ Langfuse │
+          │ (vector  │ │(state│ │ (local  │ │ (traces) │
+          │ memory)  │ │ KG)  │ │ models) │ │          │
+          └──────────┘ └──────┘ └─────────┘ └──────────┘
 ```
 
 **How a question flows through the stack:**
 
-1. You ask a question via the web UI or API.
-2. **Working memory** tracks your session context (recent queries, topics, retrieved chunks).
+1. You send a message — via **WhatsApp** (self-chat), **Telegram**, **Discord**, the **admin UI**, or the **API**. All channels share the same conversation session.
+2. **Working memory** tracks your session context (recent queries, topics, retrieved chunks) — shared across all channels.
 3. **Sentiment detection** identifies tone and urgency to adapt the response style.
-4. The **RAG bridge** classifies your question (memory lookup? coding task? incident?).
+4. The **RAG bridge** classifies your question into one of 15 task types (memory lookup? coding task? incident? translation?).
 5. **HyDE rewriting** generates a hypothetical answer passage for better vector retrieval.
 6. Long conversations are **compressed** (summarized) to fit within context limits.
 7. It searches **Qdrant** for relevant memories/documents and **deduplicates** by embedding similarity.
 8. **Knowledge graph** lookups add entity relationships to the context.
 9. It injects context + your **user profile** + **inline citation instructions** into the prompt.
-10. The **adaptive router** picks the best model, learning from feedback over time.
+10. The **adaptive router** picks the best model based on task type, quality scores, and **budget pressure** — learning from feedback over time.
 11. If all cloud providers are down, it falls back to **Ollama** running locally.
 12. A **self-critique** pass reviews the answer for accuracy before delivery.
-13. The answer streams back in real time via **SSE**, with progress events for each step.
+13. The answer streams back in real time via **SSE** (web) or is sent directly to your messaging app, with progress events for each pipeline step.
 
 ## Features
 
