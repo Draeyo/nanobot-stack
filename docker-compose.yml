@@ -69,7 +69,11 @@ services:
         limits:
           memory: 4G
 
-  # --- Traefik reverse proxy (optional, comment out if using nginx) ---
+  # --- Traefik reverse proxy ---
+  # NOT started by default. Only use if you don't already have Traefik/nginx.
+  # To include:  docker compose --profile with-traefik up -d
+  # If you already have Traefik running on the host, skip this entirely —
+  # just add a dynamic config file pointing to http://127.0.0.1:8000.
   traefik:
     image: traefik:v3.3
     container_name: nanobot-traefik

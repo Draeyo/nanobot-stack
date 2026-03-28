@@ -259,7 +259,14 @@ docker compose up -d
 curl http://127.0.0.1:8000/healthz | jq .
 ```
 
-Your assistant is live at `http://127.0.0.1:8000/admin`. Add Traefik for HTTPS.
+Your assistant is live at `http://127.0.0.1:8000/admin`.
+
+If you **don't** already have a reverse proxy (Traefik/nginx), add the built-in one:
+```bash
+docker compose --profile with-traefik up -d
+```
+
+If you **already have** Traefik running on the host, just point a dynamic config at `http://127.0.0.1:8000` — the compose file won't touch your existing setup.
 
 Optional overlays:
 ```bash
