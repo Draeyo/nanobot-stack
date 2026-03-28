@@ -67,7 +67,7 @@ Spec : [`2026-03-24-trust-engine.md`](2026-03-24-trust-engine.md)
 | Audit trail | `trust.db` | ✅ | `trust_policies` + `trust_audit` |
 | API trust | `extensions.py` | ✅ | `GET/POST /trust/policies`, `GET /trust/audit` |
 | Intégration shell | `elevated_shell.py` | ✅ | `propose_action()` consulte trust level |
-| Onglet Admin UI | `admin_ui.py` | 🔧 | Dropdowns trust level, compteurs, promotion manuelle |
+| Onglet Admin UI | `admin_ui.py` | ✅ |Dropdowns trust level, compteurs, promotion manuelle |
 
 ### 2.2 Mémoire Procédurale
 
@@ -80,8 +80,8 @@ Spec : [`2026-03-24-procedural-memory.md`](2026-03-24-procedural-memory.md)
 | Matching workflows | `procedural_memory.py` | ✅ | Qdrant cosine > 0.85 sur `procedural_workflows` |
 | Suggestion | `procedural_memory.py` | ✅ | Proposé si confiance > 0.7 |
 | Replay | `procedural_memory.py` | ✅ | Rejoue les étapes via trust engine |
-| Intégration planner | `planner.py` | 🔧 | `log_action()` après chaque étape |
-| Onglet Admin UI | `admin_ui.py` | 🔧 | Liste workflows, confiance, toggles |
+| Intégration planner | `planner.py` | ✅ |`log_action()` après chaque étape |
+| Onglet Admin UI | `admin_ui.py` | ✅ |Liste workflows, confiance, toggles |
 
 ### 2.3 Profil Utilisateur Enrichi
 
@@ -114,7 +114,7 @@ Spec : [`2026-03-24-sub-agents-architecture.md`](2026-03-24-sub-agents-architect
 | Agent Ops | `agents/ops_agent.py` | ✅ | SRE/SysAdmin, accès runbooks, commandes diagnostiques |
 | Agent Registry | `agents/__init__.py` | ✅ | `AGENT_REGISTRY = {"orchestrator": ..., "ops": ...}` |
 | API agents | `extensions.py` | ✅ | `POST /agent/run`, `GET /agent/status`, `GET /agent/history` |
-| Onglet Admin UI | `admin_ui.py` | 🔧 | Agents disponibles, exécutions récentes, coût |
+| Onglet Admin UI | `admin_ui.py` | ✅ |Agents disponibles, exécutions récentes, coût |
 
 ### 2.6 Cache Sémantique, Budget Tokens & Routing
 
@@ -133,16 +133,16 @@ Spec : [`2026-03-24-semantic-cache-token-budget-routing.md`](2026-03-24-semantic
 | Tracking usage | `token_budget.py` | ✅ | Par session, operation_type, model |
 | Enforcement budget | `token_budget.py` | ✅ | Downgrade Ollama si `budget_pressure > 0.8` |
 | Table coûts | `token_budget.py` | ✅ | Coûts estimés par modèle ($/1M tokens) |
-| Intégration router | `adaptive_router.py` | 🔧 | `budget_pressure` dans `get_model_ranking()` |
-| Onglet Admin UI | `admin_ui.py` | 🔧 | Chart.js coûts, projection mensuelle, alertes |
+| Intégration router | `adaptive_router.py` | ✅ |`budget_pressure` dans `get_model_ranking()` |
+| Onglet Admin UI | `admin_ui.py` | ✅ |Chart.js coûts, projection mensuelle, alertes |
 
 ### 2.8 Routing Local-First
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
 | Classificateur étendu | `query_classifier.py` | ✅ | 15 types (vs 9) dont `code_write`, `ops_query`, `notification` |
-| Routes local-first | `model_router.json` | 🔧 | `general_chat`, `translation`, `memory_lookup` → Ollama |
-| Budget pressure | `adaptive_router.py` | 🔧 | Bonus score modèles locaux à partir de 0.5+ |
+| Routes local-first | `model_router.json` | ✅ |`general_chat`, `translation`, `memory_lookup` → Ollama |
+| Budget pressure | `adaptive_router.py` | ✅ |Bonus score modèles locaux à partir de 0.5+ |
 
 ---
 
