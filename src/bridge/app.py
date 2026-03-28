@@ -197,14 +197,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+
 # Request-ID middleware for log correlation
 class _RequestIDMiddleware(_BHTTP):
+    """Inject X-Request-ID header for log correlation."""
+
     async def dispatch(self, request, call_next):
         rid = request.headers.get("X-Request-ID", uuid.uuid4().hex[:12])
         request.state.request_id = rid
         response = await call_next(request)
         response.headers["X-Request-ID"] = rid
         return response
+
 
 app.add_middleware(_RequestIDMiddleware)
 
@@ -239,7 +244,7 @@ def _shutdown():
         watcher = getattr(app.state, "file_watcher", None)
         if watcher:
             watcher.stop()
-    except Exception:
+    except (AttributeError, OSError):
         pass
     # Stop local doc watcher
     if _local_doc_watcher is not None:
@@ -1097,13 +1102,13 @@ def search(body: SearchIn):
     try:
         from feedback import apply_feedback_boosts
         reranked = apply_feedback_boosts(reranked)
-    except Exception:
+    except (ImportError, RuntimeError):
         pass
     # Apply memory decay: penalize old, infrequently-accessed memories
     try:
         from memory_decay import apply_decay_to_results
         reranked = apply_decay_to_results(reranked, score_key="final_score")
-    except Exception:
+    except (ImportError, RuntimeError):
         pass
     # Sub-projet H: reinforce memory for retrieved points
     try:
@@ -1187,9 +1192,16 @@ def _remember_internal(body: RememberIn) -> dict[str, Any]:
 
 @app.post("/remember", dependencies=[Depends(verify_token)])
 def remember(body: RememberIn, request: Request):
+    """Store a memory in the vector database."""
     from rate_limiter import extract_user_id
     rate_limiters.check_per_user("remember", extract_user_id(request))
-    return _remember_internal(body)
+    try:
+        return _remember_internal(body)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("remember endpoint failed")
+        raise HTTPException(status_code=500, detail="Failed to store memory") from exc
 
 @app.post("/ask", dependencies=[Depends(verify_token)])
 def ask(body: AskIn):
@@ -1218,6 +1230,8 @@ def ask(body: AskIn):
     return {"question": body.question, "answer": answer["text"], "answer_attempts": answer["attempts"], "results": retrieved["results"], "embedding_attempts": retrieved["embedding_attempts"]}
 
 class ChatIn(BaseModel):
+    """Request body for the /chat endpoint."""
+
     task_type: str = Field("fallback_general", max_length=100)
     messages: list[dict[str, str]] = Field(..., max_length=100)
     json_mode: bool = False
