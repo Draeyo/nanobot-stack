@@ -228,19 +228,37 @@ ADMIN_NAV = """
 # ---------------------------------------------------------------------------
 SECTION_ANALYTICS = """
 <section x-show="tab==='analytics'" x-cloak>
+  <div class="telemetry-bar mb-16">
+    <span class="pulse-dot"></span>
+    <span>Real-time Telemetry</span>
+    <span style="margin-left:auto" class="mono" x-text="'Last update: '+(health?.time?.substring(11,19)||'--:--:--')+' UTC'"></span>
+  </div>
   <div class="flex-between mb-12">
     <h2>Analytics</h2>
     <div class="flex gap-8">
       <label class="text-sm text-muted"><input type="checkbox" x-model="autoRefresh"> Auto-refresh</label>
       <button class="btn btn-muted btn-sm" @click="loadAnalytics()">Refresh</button>
+      <button class="btn btn-blue btn-sm" @click="exportReport()">Export Report</button>
+      <button class="btn btn-green btn-sm" @click="showAgentTaskModal=true">New Agent Task</button>
     </div>
   </div>
   <div class="grid">
-    <div class="card"><h3>Health</h3>
+    <div class="card"><h3>System Pulse</h3>
       <template x-if="health"><div>
-        <div class="stat" x-text="health.status||'ok'"></div>
+        <div class="stat" :class="health.ok?'text-green':'text-red'" x-text="health.ok?'Operational':'Degraded'"></div>
         <div class="stat-label" x-text="'Qdrant: '+(health.checks?.qdrant?.ok?'connected':'down')"></div>
         <div class="stat-label" x-text="'Collections: '+(health.checks?.qdrant?.collections||0)"></div>
+        <div class="stat-label" x-text="'API Keys: '+(health.checks?.api_keys?.configured?'configured':'missing')"></div>
+      </div></template>
+    </div>
+    <div class="card"><h3>Token Consumption</h3>
+      <template x-if="analytics.tokenStats"><div>
+        <div class="stat" x-text="(analytics.tokenStats.total_tokens||0).toLocaleString()"></div>
+        <div class="stat-label">total tokens</div>
+        <div class="text-sm mt-8 mono">
+          <span class="text-muted">In:</span> <span x-text="(analytics.tokenStats.total_input_tokens||0).toLocaleString()"></span>
+          <span class="text-muted" style="margin-left:8px">Out:</span> <span x-text="(analytics.tokenStats.total_output_tokens||0).toLocaleString()"></span>
+        </div>
       </div></template>
     </div>
     <div class="card"><h3>Circuit Breakers</h3>
@@ -273,10 +291,14 @@ SECTION_ANALYTICS = """
         <div class="text-sm mt-8" x-text="'Boosted chunks: '+(analytics.feedback.boosted_chunks||0)"></div>
       </div></template>
     </div>
-    <div class="card"><h3>Ingestion</h3>
+    <div class="card"><h3>Vector Storage</h3>
       <template x-if="analytics.ingest"><div>
-        <div class="stat" x-text="analytics.ingest.status||'idle'"></div>
-        <div class="stat-label" x-text="'Total indexed: '+(analytics.ingest.total_indexed||0)"></div>
+        <div class="stat" x-text="(analytics.ingest.total_indexed||0).toLocaleString()"></div>
+        <div class="stat-label">indexed chunks</div>
+        <div class="progress-track mt-8">
+          <div class="progress-fill" style="background:var(--secondary)" :style="'width:'+Math.min(100,(analytics.ingest.total_indexed||0)/1000*100)+'%'"></div>
+        </div>
+        <div class="text-xs text-muted mt-4" x-text="'Status: '+(analytics.ingest.status||'idle')"></div>
       </div></template>
     </div>
     <div class="card"><h3>Profile</h3>
@@ -298,6 +320,30 @@ SECTION_ANALYTICS = """
     <div class="card"><h3>Token Usage by Model</h3><div class="chart-container"><canvas id="costChart"></canvas></div></div>
     <div class="card"><h3>Cache Performance</h3><div class="chart-container"><canvas id="cacheChart"></canvas></div></div>
   </div>
+  <div class="card mb-16">
+    <div class="flex-between mb-8">
+      <h3>Live Agent Activity</h3>
+      <button class="btn btn-muted btn-sm" @click="loadRecentActivity()">Refresh</button>
+    </div>
+    <template x-if="recentActivity.length">
+      <div style="max-height:300px;overflow-y:auto">
+        <template x-for="a in recentActivity" :key="a.timestamp">
+          <div class="flex-between" style="padding:8px 0;border-bottom:1px solid var(--ghost-border)">
+            <div>
+              <span class="badge" :class="a.status==='completed'?'badge-green':a.status==='running'?'badge-blue':'badge-red'" x-text="a.status"></span>
+              <span class="text-sm" style="margin-left:8px" x-text="a.agent||'system'"></span>
+              <span class="text-xs text-muted" style="margin-left:8px" x-text="a.task?.substring(0,80)"></span>
+            </div>
+            <div class="flex gap-8">
+              <span class="mono text-xs" x-text="a.tokens?a.tokens.toLocaleString()+' tok':''"></span>
+              <span class="text-xs text-muted" x-text="a.timestamp?.substring(11,19)"></span>
+            </div>
+          </div>
+        </template>
+      </div>
+    </template>
+    <p x-show="!recentActivity.length" class="text-muted text-sm">No recent agent activity</p>
+  </div>
   <div class="grid">
     <div class="card"><h3>Working Memory</h3>
       <template x-if="analytics.wm"><div>
@@ -318,6 +364,18 @@ SECTION_ANALYTICS = """
       </div></template>
     </div>
   </div>
+  <!-- Agent Task Modal -->
+  <div class="modal-bg" x-show="showAgentTaskModal" x-cloak @click.self="showAgentTaskModal=false">
+    <div class="modal">
+      <h3>New Agent Task</h3>
+      <textarea x-model="agentTaskInput" placeholder="Describe the task for the agent..." rows="3"></textarea>
+      <div class="flex gap-8 mt-12">
+        <button class="btn btn-blue" @click="runAgentTask()">Run</button>
+        <button class="btn btn-muted" @click="showAgentTaskModal=false">Cancel</button>
+      </div>
+      <div class="pre-wrap mt-12" x-show="agentTaskResult" x-text="JSON.stringify(agentTaskResult,null,2)"></div>
+    </div>
+  </div>
 </section>
 """
 
@@ -326,10 +384,85 @@ SECTION_ANALYTICS = """
 # ---------------------------------------------------------------------------
 SECTION_SETTINGS = """
 <section x-show="tab==='settings'" x-cloak>
-  <h2 class="mb-12">Settings</h2>
+  <h2 class="mb-12">Model Configuration</h2>
   <div class="warn-banner" x-show="!settingsConfigWriterEnabled">
     CONFIG_WRITER_ENABLED is false. Setting changes via this UI require the config writer to be enabled.
   </div>
+
+  <!-- Model config controls -->
+  <div class="grid mb-16">
+    <div class="card">
+      <h3>Temperature</h3>
+      <div class="flex-between">
+        <span class="text-xs text-muted">Precise</span>
+        <span class="stat-value" x-text="modelTemp.toFixed(2)"></span>
+        <span class="text-xs text-muted">Creative</span>
+      </div>
+      <input type="range" min="0" max="1" step="0.05" x-model.number="modelTemp"
+        @change="proposeModelSetting('TEMPERATURE',modelTemp)" style="width:100%;accent-color:var(--primary)">
+    </div>
+    <div class="card">
+      <h3>Top-P</h3>
+      <div class="flex-between">
+        <span class="text-xs text-muted">Narrow</span>
+        <span class="stat-value" x-text="modelTopP.toFixed(2)"></span>
+        <span class="text-xs text-muted">Diverse</span>
+      </div>
+      <input type="range" min="0" max="1" step="0.05" x-model.number="modelTopP"
+        @change="proposeModelSetting('TOP_P',modelTopP)" style="width:100%;accent-color:var(--primary)">
+    </div>
+    <div class="card">
+      <h3>Max Tokens</h3>
+      <div class="stat-value" x-text="modelMaxTokens.toLocaleString()"></div>
+      <input type="range" min="256" max="128000" step="256" x-model.number="modelMaxTokens"
+        @change="proposeModelSetting('MAX_TOKENS',modelMaxTokens)" style="width:100%;accent-color:var(--primary)">
+      <div class="text-xs text-muted mt-4" x-text="'~'+(modelMaxTokens/128000*100).toFixed(0)+'% context window'"></div>
+    </div>
+    <div class="card">
+      <h3>Tool Execution</h3>
+      <div class="flex-between">
+        <span class="text-sm" x-text="modelToolUse?'Enabled — AI can call external tools':'Disabled'"></span>
+        <button class="btn btn-sm" :class="modelToolUse?'btn-green':'btn-muted'"
+          @click="modelToolUse=!modelToolUse;proposeModelSetting('TOOL_USE_ENABLED',modelToolUse)" x-text="modelToolUse?'On':'Off'"></button>
+      </div>
+    </div>
+    <div class="card">
+      <h3>Knowledge Base</h3>
+      <select x-model="selectedKB" style="width:100%;margin-top:8px"
+        @change="proposeModelSetting('DEFAULT_COLLECTION',selectedKB)">
+        <option value="">None (Raw Model)</option>
+        <template x-for="c in kbCollections" :key="c">
+          <option :value="c" x-text="c"></option>
+        </template>
+      </select>
+      <div class="text-xs text-muted mt-4">Default collection for RAG queries</div>
+    </div>
+  </div>
+
+  <!-- System prompt editor -->
+  <div class="card mb-16">
+    <div class="flex-between mb-8">
+      <h3>System Prompt</h3>
+      <div class="flex gap-8">
+        <span class="text-xs text-muted mono" x-text="'L: '+(systemPrompt.split('\\n').length)+' | C: '+systemPrompt.length"></span>
+        <span class="badge badge-blue">Markdown Supported</span>
+      </div>
+    </div>
+    <textarea x-model="systemPrompt" rows="8" style="font-family:'JetBrains Mono',monospace;font-size:12px;width:100%;min-height:120px"
+      placeholder="You are an advanced AI system..."></textarea>
+    <div class="flex gap-8 mt-8">
+      <button class="btn btn-blue btn-sm" @click="proposeModelSetting('SYSTEM_PROMPT',systemPrompt)">Save Prompt</button>
+    </div>
+  </div>
+
+  <div class="flex gap-8 mb-16">
+    <button class="btn btn-muted btn-sm" @click="resetModelDefaults()">Reset Defaults</button>
+    <button class="btn btn-blue btn-sm" @click="testConfig()">Test Configuration</button>
+    <span class="text-xs text-green" x-show="testConfigResult" x-text="testConfigResult"></span>
+  </div>
+
+  <!-- Settings table -->
+  <h3 class="mb-8" style="font-size:1rem;color:var(--on-surface)">All Settings</h3>
   <div class="subtabs mb-12">
     <template x-for="sec in settingSections" :key="sec">
       <button class="btn btn-muted btn-sm" :class="{'active':settingFilter===sec}"
@@ -388,27 +521,45 @@ SECTION_SETTINGS = """
 # ---------------------------------------------------------------------------
 SECTION_TOOLS = """
 <section x-show="tab==='tools'" x-cloak>
-  <h2 class="mb-12">Tools & Routing</h2>
-  <div class="grid-wide">
-    <div class="card">
-      <h3>Loaded Plugins</h3>
-      <template x-if="plugins.plugins&&plugins.plugins.length">
-        <table class="tbl">
-          <thead><tr><th>Plugin</th><th>Tools</th><th>Hooks</th><th>Has Router</th></tr></thead>
-          <tbody>
-            <template x-for="p in plugins.plugins" :key="p.name">
-              <tr>
-                <td class="mono" x-text="p.name"></td>
-                <td x-text="p.tools?.length||0"></td>
-                <td x-text="p.hooks?.length||0"></td>
-                <td><span :class="p.has_router?'badge badge-green':'badge badge-muted'" x-text="p.has_router?'yes':'no'"></span></td>
-              </tr>
-            </template>
-          </tbody>
-        </table>
-      </template>
-      <p x-show="!plugins.plugins||!plugins.plugins.length" class="text-muted">No plugins loaded</p>
+  <h2 class="mb-12">Skills & Tools</h2>
+  <p class="text-xs text-muted mb-16">Extend your AI's capabilities by managing external API integrations, internal connectors, and custom function schemas.</p>
+
+  <!-- Plugin cards grid -->
+  <div class="grid mb-16">
+    <template x-for="p in (plugins.plugins||[])" :key="p.name">
+      <div class="card" style="background:var(--surface-container-low)">
+        <div class="flex-between mb-8">
+          <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:0.875rem;color:var(--on-surface)" x-text="p.name"></span>
+          <span class="badge" :class="p.has_router?'badge-green':'badge-muted'" x-text="p.has_router?'Active':'Inactive'"></span>
+        </div>
+        <div class="flex gap-8 mb-8">
+          <span class="badge badge-blue" x-text="(p.tools?.length||0)+' tools'"></span>
+          <span class="badge badge-muted" x-text="(p.hooks?.length||0)+' hooks'"></span>
+        </div>
+        <template x-if="p.tools?.length">
+          <div class="text-xs text-muted" x-text="p.tools.map(t=>t.name||t).join(', ')"></div>
+        </template>
+      </div>
+    </template>
+    <div class="card" x-show="!plugins.plugins||!plugins.plugins.length">
+      <p class="text-muted">No plugins loaded</p>
     </div>
+  </div>
+
+  <!-- Performance metrics -->
+  <div class="grid mb-16">
+    <div class="card"><h3>Token Cost (24h)</h3>
+      <div class="stat-value" x-text="toolStats.totalCost?'$'+toolStats.totalCost.toFixed(2):'$0.00'"></div>
+    </div>
+    <div class="card"><h3>Total Calls</h3>
+      <div class="stat-value" x-text="(toolStats.totalCalls||0).toLocaleString()"></div>
+    </div>
+    <div class="card"><h3>Models Active</h3>
+      <div class="stat-value" x-text="toolStats.modelsActive||0"></div>
+    </div>
+  </div>
+
+  <div class="grid-wide">
     <div class="card">
       <h3>Model Routing</h3>
       <template x-if="routes"><div>
@@ -448,11 +599,82 @@ SECTION_TOOLS = """
 # ---------------------------------------------------------------------------
 SECTION_VECTOR_DB = """
 <section x-show="tab==='vectordb'" x-cloak>
-  <h2 class="mb-12">Vector Database</h2>
+  <div class="flex-between mb-12">
+    <h2>Knowledge Base</h2>
+    <span class="badge" :class="health?.ok?'badge-green':'badge-red'" x-text="health?.ok?'Optimal':'Degraded'"></span>
+  </div>
+  <div class="grid mb-16">
+    <div class="card"><h3>Total Chunks</h3>
+      <div class="stat" x-text="(vdbMetrics.totalChunks||0).toLocaleString()"></div>
+    </div>
+    <div class="card"><h3>Collections</h3>
+      <div class="stat" x-text="collections.length||0"></div>
+    </div>
+    <div class="card"><h3>Documents</h3>
+      <div class="stat" x-text="(vdbMetrics.totalDocs||0).toLocaleString()"></div>
+      <div class="stat-label" x-text="vdbMetrics.docsStatus||''"></div>
+    </div>
+  </div>
+  <div class="card mb-16" style="border:2px dashed var(--ghost-border);text-align:center;padding:32px"
+    @dragover.prevent="$el.style.borderColor='var(--primary)'"
+    @dragleave="$el.style.borderColor='var(--ghost-border)'"
+    @drop.prevent="handleDocDrop($event);$el.style.borderColor='var(--ghost-border)'">
+    <p class="text-muted mb-8">Drag and drop documents here to begin vector indexing</p>
+    <div class="flex gap-8" style="justify-content:center">
+      <span class="badge badge-blue">PDF</span><span class="badge badge-blue">DOCX</span>
+      <span class="badge badge-blue">TXT</span><span class="badge badge-blue">MD</span>
+    </div>
+    <input type="file" id="docFileInput" style="display:none" accept=".pdf,.docx,.txt,.md,.csv" @change="handleDocFile($event)">
+    <button class="btn btn-blue mt-12" @click="document.getElementById('docFileInput').click()">Select Files</button>
+    <div class="text-sm mt-8" x-show="uploadStatus" :class="uploadStatus.startsWith('Error')?'text-red':'text-green'" x-text="uploadStatus"></div>
+  </div>
+  <div class="card mb-16" x-show="ingestPipeline.active">
+    <h3>Indexing Pipeline</h3>
+    <div class="pipeline-steps">
+      <template x-for="s in ingestPipeline.steps" :key="s.name">
+        <span class="pipe-step" :class="s.status" x-text="s.name"></span>
+      </template>
+    </div>
+    <div class="text-xs text-muted" x-text="ingestPipeline.detail"></div>
+  </div>
+  <div class="card mb-16">
+    <div class="flex-between mb-8">
+      <h3>Documents</h3>
+      <div class="flex gap-8">
+        <input type="text" x-model="docSearchFilter" placeholder="Filter by type..." @keyup.enter="loadDocuments()" style="width:180px">
+        <button class="btn btn-muted btn-sm" @click="loadDocuments()">Refresh</button>
+      </div>
+    </div>
+    <template x-if="docsList.length">
+      <div>
+        <table class="tbl">
+          <thead><tr><th>Document</th><th>Status</th><th>Size</th><th>Ingested</th><th></th></tr></thead>
+          <tbody>
+            <template x-for="d in docsList" :key="d.doc_id">
+              <tr>
+                <td class="mono text-sm" x-text="d.filename||d.doc_id"></td>
+                <td><span class="badge" :class="d.status==='indexed'?'badge-green':d.status==='processing'?'badge-blue':d.status==='error'?'badge-red':'badge-muted'" x-text="d.status||'unknown'"></span></td>
+                <td class="mono text-xs" x-text="d.size?(d.size/1024).toFixed(0)+' KB':''"></td>
+                <td class="text-xs" x-text="d.ingested_at?.substring(0,10)||d.created_at?.substring(0,10)||''"></td>
+                <td><button class="btn btn-red btn-sm" @click="deleteDoc(d.doc_id)">Delete</button></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+        <div class="flex-between mt-8">
+          <span class="text-xs text-muted" x-text="'Total: '+docsTotal+' documents'"></span>
+          <div class="flex gap-8">
+            <button class="btn btn-muted btn-sm" x-show="docsOffset>0" @click="docsOffset-=20;loadDocuments()">Prev</button>
+            <button class="btn btn-muted btn-sm" x-show="docsList.length>=20" @click="docsOffset+=20;loadDocuments()">Next</button>
+          </div>
+        </div>
+      </div>
+    </template>
+    <p x-show="!docsList.length" class="text-muted text-sm">No documents indexed yet</p>
+  </div>
   <div class="grid mb-16">
     <template x-for="c in collections" :key="c.name">
-      <div class="card" @click="browseCollection=c.name;scrollOffset=null;scrollPoints=[];scrollCollection()"
-           style="cursor:pointer">
+      <div class="card" @click="browseCollection=c.name;scrollOffset=null;scrollPoints=[];scrollCollection()" style="cursor:pointer">
         <h3 x-text="c.name"></h3>
         <div class="stat" x-text="c.points_count??'?'"></div>
         <div class="stat-label">points</div>
@@ -470,7 +692,7 @@ SECTION_VECTOR_DB = """
     <template x-if="searchResults.length">
       <div class="mt-8" style="max-height:400px;overflow-y:auto">
         <template x-for="(r,i) in searchResults" :key="i">
-          <div class="card mb-8" style="background:var(--input-bg)">
+          <div class="card mb-8" style="background:var(--surface-container-lowest)">
             <div class="flex-between mb-4">
               <span class="badge badge-blue" x-text="'#'+(i+1)+' score: '+(r.score?.toFixed(4)||'?')"></span>
               <span class="text-xs text-muted" x-text="r.collection+' / '+(r.source_name||'')"></span>
@@ -488,15 +710,13 @@ SECTION_VECTOR_DB = """
     </div>
     <div style="max-height:400px;overflow-y:auto">
       <template x-for="(p,i) in scrollPoints" :key="p.id">
-        <div class="card mb-8" style="background:var(--input-bg)">
+        <div class="card mb-8" style="background:var(--surface-container-lowest)">
           <div class="text-xs text-muted mb-4" x-text="'ID: '+p.id"></div>
           <div class="text-sm" x-text="(p.payload?.text||JSON.stringify(p.payload)||'').substring(0,200)"></div>
-          <div class="text-xs text-muted mt-4" x-text="'tags: '+(p.payload?.tags||[]).join(', ')"></div>
         </div>
       </template>
     </div>
-    <button class="btn btn-muted btn-sm mt-8" x-show="scrollNextOffset"
-            @click="scrollCollection()">Load more</button>
+    <button class="btn btn-muted btn-sm mt-8" x-show="scrollNextOffset" @click="scrollCollection()">Load more</button>
   </div>
 </section>
 """
@@ -506,15 +726,26 @@ SECTION_VECTOR_DB = """
 # ---------------------------------------------------------------------------
 SECTION_LOGS = """
 <section x-show="tab==='logs'" x-cloak>
-  <div class="flex-between mb-12">
-    <h2>Audit Log</h2>
+  <div class="flex-between mb-8">
+    <h2>System Logs</h2>
     <div class="flex gap-8">
+      <span class="badge" :class="health?.ok?'badge-green':'badge-red'" x-text="health?.ok?'Connected':'Down'"></span>
+      <span class="text-xs text-muted mono" x-text="'Qdrant: '+(health?.checks?.qdrant?.collections||0)+' collections'"></span>
+    </div>
+  </div>
+  <div class="flex gap-8 mb-12" style="flex-wrap:wrap">
+    <template x-for="lvl in ['ALL','INFO','WARNING','ERROR','DEBUG']" :key="lvl">
+      <button class="btn btn-sm" :class="logLevelFilter===lvl?'btn-blue':'btn-muted'"
+        @click="logLevelFilter=lvl;loadLogs()" x-text="lvl"></button>
+    </template>
+    <div style="margin-left:auto" class="flex gap-8">
       <select x-model="logMethodFilter" @change="loadLogs()">
         <option value="">All methods</option>
         <option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option>
       </select>
       <input type="text" x-model="logPathFilter" placeholder="Path filter..." @keyup.enter="loadLogs()">
       <button class="btn btn-muted btn-sm" @click="loadLogs()">Refresh</button>
+      <button class="btn btn-muted btn-sm" @click="downloadLogs()">Download</button>
     </div>
   </div>
   <div class="card">
@@ -536,7 +767,7 @@ SECTION_LOGS = """
       </table>
     </div>
     <div class="flex-between mt-8">
-      <span class="text-xs text-muted" x-text="'Total: '+(auditTotal||0)+' entries'"></span>
+      <span class="text-xs text-muted" x-text="'Showing '+auditLogs.length+' / '+(auditTotal||0)+' entries'"></span>
       <div class="flex gap-8">
         <button class="btn btn-muted btn-sm" x-show="auditOffset>0" @click="auditOffset-=100;loadLogs()">Prev</button>
         <button class="btn btn-muted btn-sm" x-show="auditLogs.length>=100" @click="auditOffset+=100;loadLogs()">Next</button>
@@ -569,14 +800,28 @@ SECTION_CHAT = """
           <div class="chat-bubble chat-bot" x-show="chatStreaming" x-html="renderMd(chatStreamText)"></div>
         </div>
         <div class="chat-input-row">
-          <textarea x-model="chatInput" @keydown.enter.prevent="if(!$event.shiftKey)sendChat()"
-                    placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
-                    :disabled="chatStreaming"></textarea>
+          <div style="flex:1;display:flex;flex-direction:column">
+            <div class="flex gap-8" style="padding:4px 8px;background:var(--surface-container-low)">
+              <button style="border:none;background:none;color:var(--on-surface-variant);cursor:pointer;padding:2px 6px;font-size:12px" @click="chatInput+='**bold**'" title="Bold"><b>B</b></button>
+              <button style="border:none;background:none;color:var(--on-surface-variant);cursor:pointer;padding:2px 6px;font-size:12px" @click="chatInput+='`code`'" title="Code">&lt;/&gt;</button>
+            </div>
+            <textarea x-model="chatInput" @keydown.enter.prevent="if(!$event.shiftKey)sendChat()"
+                      placeholder="Type a message... (Enter to send, Shift+Enter for newline)"
+                      :disabled="chatStreaming" style="border-top:none"></textarea>
+          </div>
           <button class="btn btn-blue" @click="sendChat()" :disabled="chatStreaming">Send</button>
         </div>
       </div>
     </div>
     <div>
+      <div class="card mb-12">
+        <h3>Active Model</h3>
+        <div class="stat-value text-primary" x-text="chatActiveModel||'default'"></div>
+        <div class="text-xs text-muted mt-4" x-text="health?.ok?'System uptime: operational':'System status unknown'"></div>
+        <div class="flex gap-8 mt-8">
+          <button class="btn btn-muted btn-sm" @click="clearChatSession()">Clear Session</button>
+        </div>
+      </div>
       <div class="card mb-12">
         <h3>Pipeline Options</h3>
         <label class="text-sm"><input type="checkbox" x-model="chatOpts.auto_classify"> Auto-classify</label><br>
@@ -1466,6 +1711,16 @@ function adminApp(){return{
   // --- Advanced ---
   kgQuery:'',kgResult:null,piiText:'',piiResult:null,explainQuery:'',explainResult:null,
 
+  // --- Stitch features ---
+  recentActivity:[],showAgentTaskModal:false,agentTaskInput:'',agentTaskResult:null,
+  modelTemp:0.7,modelTopP:0.9,modelMaxTokens:4096,modelToolUse:true,testConfigResult:'',
+  systemPrompt:'',selectedKB:'',kbCollections:[],
+  toolStats:{totalCost:0,totalCalls:0,modelsActive:0},
+  docsList:[],docsTotal:0,docsOffset:0,docSearchFilter:'',uploadStatus:'',
+  vdbMetrics:{totalChunks:0,totalDocs:0,docsStatus:''},
+  ingestPipeline:{active:false,steps:[],detail:''},
+  logLevelFilter:'ALL',chatActiveModel:'',
+
   // === Lifecycle ===
   init(){
     if(!this.token){const t=prompt('Bridge token:');if(t){this.token=t;localStorage.setItem('bt',t)}}
@@ -1495,6 +1750,7 @@ function adminApp(){return{
         case'channels':await this.loadChannels();break;
         case'shell':await this.loadShell();break;
         case'config':await this.loadConfig();break;
+        case'chat':try{const r=await this.api('/routes');this.chatActiveModel=Object.keys(r.profiles||{})[0]||'default'}catch(e){}break;
         case'trust':await this.loadTrust();break;
         case'costs':await this.loadCosts();break;
         case'workflows':await this.loadWorkflows();break;
@@ -1512,7 +1768,8 @@ function adminApp(){return{
         this.api('/rate-limits'),this.api('/feedback-stats'),this.api('/ingest-status'),
         this.api('/profile'),this.api('/knowledge-graph/stats'),this.api('/token-stats'),
         this.api('/working-memory'),this.api('/plugins'),this.api('/routes')]);
-      this.health=h;this.analytics={cbs:cb,cache:ca,rates:ra,feedback:fb,ingest:ig,profile:pr,kg:kg,wm:wm,plugins:pl,routes:ro};
+      this.health=h;this.analytics={cbs:cb,cache:ca,rates:ra,feedback:fb,ingest:ig,profile:pr,kg:kg,tokenStats:ts,wm:wm,plugins:pl,routes:ro};
+      this.loadRecentActivity();
       this.routes=ro;
       this.$nextTick(()=>this.updateCharts(ts,ca));
     }catch(e){console.error('loadAnalytics:',e)}
@@ -1555,6 +1812,13 @@ function adminApp(){return{
       this.allSettings=Object.values(sections).flat();
       const cw=this.allSettings.find(s=>s.key==='CONFIG_WRITER_ENABLED');
       this.settingsConfigWriterEnabled=cw&&cw.value==='true';
+      const t=this.allSettings.find(s=>s.key==='TEMPERATURE');if(t)this.modelTemp=parseFloat(t.value)||0.7;
+      const tp=this.allSettings.find(s=>s.key==='TOP_P');if(tp)this.modelTopP=parseFloat(tp.value)||0.9;
+      const mt=this.allSettings.find(s=>s.key==='MAX_TOKENS');if(mt)this.modelMaxTokens=parseInt(mt.value)||4096;
+      const tu=this.allSettings.find(s=>s.key==='TOOL_USE_ENABLED');if(tu)this.modelToolUse=tu.value==='true';
+      const sp=this.allSettings.find(s=>s.key==='SYSTEM_PROMPT');if(sp)this.systemPrompt=sp.value||'';
+      const kb=this.allSettings.find(s=>s.key==='DEFAULT_COLLECTION');if(kb)this.selectedKB=kb.value||'';
+      try{const cols=await this.api('/admin/collections');this.kbCollections=(cols.collections||[]).map(c=>c.name)}catch(e){}
     }catch(e){console.error('loadSettings:',e)}
   },
   async proposeSetting(key){
@@ -1570,6 +1834,10 @@ function adminApp(){return{
     try{
       this.plugins=await this.api('/plugins');
       this.routes=await this.api('/routes');
+      try{const ts=await this.api('/token-stats');const bm=ts.by_model||{};
+        this.toolStats={totalCost:Object.values(bm).reduce((s,m)=>s+(m.cost||0),0),
+          totalCalls:Object.values(bm).reduce((s,m)=>s+(m.calls||0),0),
+          modelsActive:Object.keys(bm).length}}catch(e){}
     }catch(e){console.error('loadTools:',e)}
   },
   async previewRoute(){
@@ -1579,7 +1847,10 @@ function adminApp(){return{
 
   // === Vector DB ===
   async loadVectorDB(){
-    try{const d=await this.api('/admin/collections');this.collections=d.collections||[]}catch(e){console.error(e)}
+    try{const d=await this.api('/admin/collections');this.collections=d.collections||[];
+      this.vdbMetrics.totalChunks=this.collections.reduce((s,c)=>s+(c.points_count||0),0);
+      try{const ds=await this.api('/api/docs/status');this.vdbMetrics.totalDocs=ds.total_documents||ds.total||0;this.vdbMetrics.docsStatus=ds.status||''}catch(e){}
+      await this.loadDocuments()}catch(e){console.error(e)}
   },
   async runSearch(){
     if(!this.searchQuery)return;
@@ -1601,6 +1872,10 @@ function adminApp(){return{
       if(this.logPathFilter)url+='&path_filter='+encodeURIComponent(this.logPathFilter);
       const d=await this.api(url);
       this.auditLogs=d.entries||[];this.auditTotal=d.total||0;
+      if(this.logLevelFilter!=='ALL'){const lvl=this.logLevelFilter;
+        this.auditLogs=this.auditLogs.filter(e=>{
+          if(lvl==='ERROR')return e.status>=400;if(lvl==='WARNING')return e.status>=300&&e.status<400;
+          if(lvl==='INFO')return e.status>=200&&e.status<300;if(lvl==='DEBUG')return e.method==='GET';return true})}
     }catch(e){console.error(e)}
   },
 
@@ -1702,6 +1977,42 @@ function adminApp(){return{
     try{this.piiResult=await this.api('/pii-check',{method:'POST',body:{text:this.piiText}})}catch(e){console.error(e)}},
   async runExplain(){if(!this.explainQuery)return;
     try{this.explainResult=await this.api('/explain',{method:'POST',body:{query:this.explainQuery}})}catch(e){console.error(e)}},
+
+  // === Stitch features ===
+  async loadRecentActivity(){
+    try{const d=await this.api('/agent/history?limit=10');this.recentActivity=d.executions||[]}catch(e){console.error(e)}},
+  async exportReport(){
+    try{const d=await this.api('/token-stats');const blob=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+      const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='nanobot-report.json';a.click()}catch(e){alert('Export failed: '+e.message)}},
+  async runAgentTask(){
+    if(!this.agentTaskInput.trim())return;this.agentTaskResult=null;
+    try{this.agentTaskResult=await this.api('/agent/run',{method:'POST',body:{task:this.agentTaskInput}});
+      this.agentTaskInput='';await this.loadRecentActivity()}catch(e){this.agentTaskResult={error:e.message}}},
+  async proposeModelSetting(key,val){
+    try{await this.api('/settings/key/'+key,{method:'POST',body:{value:String(val),description:'Changed via admin model controls'}});
+      this.testConfigResult='Setting '+key+' proposed'}catch(e){alert('Error: '+e.message)}},
+  async resetModelDefaults(){this.modelTemp=0.7;this.modelTopP=0.9;this.modelMaxTokens=4096;this.modelToolUse=true;
+    alert('Defaults restored locally. Use Save or slider changes to persist.')},
+  async testConfig(){this.testConfigResult='Running selftest...';
+    try{const r=await this.api('/selftest',{method:'POST'});
+      this.testConfigResult=r.ok?'All checks passed':'Some checks failed';console.log('selftest:',r)}catch(e){this.testConfigResult='Error: '+e.message}},
+  async loadDocuments(){
+    try{let url='/api/docs/?limit=20&offset='+this.docsOffset;
+      if(this.docSearchFilter)url+='&file_type='+encodeURIComponent(this.docSearchFilter);
+      const d=await this.api(url);this.docsList=d.items||[];this.docsTotal=d.total||0}catch(e){this.docsList=[];this.docsTotal=0}},
+  async deleteDoc(id){if(!confirm('Delete this document?'))return;
+    try{await this.api('/api/docs/'+id,{method:'DELETE'});await this.loadDocuments()}catch(e){alert('Error: '+e.message)}},
+  async handleDocDrop(e){const files=e.dataTransfer?.files;if(!files?.length)return;for(const f of files)await this.uploadDoc(f)},
+  handleDocFile(e){const files=e.target.files;if(!files?.length)return;for(const f of files)this.uploadDoc(f);e.target.value=''},
+  async uploadDoc(file){this.uploadStatus='Uploading '+file.name+'...';
+    this.ingestPipeline={active:true,steps:[{name:'UPLOAD',status:'active'},{name:'CHUNK',status:''},{name:'EMBED',status:''},{name:'STORE',status:''},{name:'SYNC',status:''}],detail:file.name};
+    try{const r=await this.api('/api/docs/ingest',{method:'POST',body:{file_path:file.name}});
+      this.uploadStatus=r.status==='error'?'Error: '+(r.error_message||'failed'):'Ingested: '+file.name;
+      this.ingestPipeline.steps.forEach(s=>s.status='done');setTimeout(()=>{this.ingestPipeline.active=false},3000);
+      await this.loadDocuments()}catch(e){this.uploadStatus='Error: '+e.message;this.ingestPipeline.active=false}},
+  async downloadLogs(){const blob=new Blob([JSON.stringify(this.auditLogs,null,2)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='nanobot-logs.json';a.click()},
+  async clearChatSession(){this.chatMessages=[];this.chatStreamText='';this.chatSessionId='';this.chatSources=[];this.pipelineSteps=[]},
 
   // === Trust (v10) ===
   async loadTrust(){
