@@ -557,6 +557,60 @@ SECTION_TOOLS = """
     </div>
   </div>
 
+  <!-- Tool inventory -->
+  <div class="card mb-16">
+    <div class="flex-between mb-8">
+      <h3>Tool Inventory</h3>
+      <span class="badge badge-blue" x-text="(plugins.tools||[]).length+' plugin tools + 6 built-in'"></span>
+    </div>
+
+    <!-- Built-in tools -->
+    <div class="text-xs text-muted mb-8" style="text-transform:uppercase;letter-spacing:.08em">Built-in Tools</div>
+    <div class="grid mb-12" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+      <template x-for="t in builtinTools" :key="t.name">
+        <div style="padding:8px 12px;background:var(--surface-container-low);border-radius:6px">
+          <div class="mono text-sm" x-text="t.name"></div>
+          <div class="text-xs text-muted" x-text="t.desc"></div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Plugin tools -->
+    <template x-if="(plugins.tools||[]).length">
+      <div>
+        <div class="text-xs text-muted mb-8" style="text-transform:uppercase;letter-spacing:.08em">Plugin Tools</div>
+        <table class="tbl">
+          <thead><tr><th>Tool</th><th>Plugin</th><th>Description</th><th></th></tr></thead>
+          <tbody>
+            <template x-for="t in (plugins.tools||[])" :key="t.name">
+              <tr>
+                <td class="mono" x-text="t.name"></td>
+                <td><span class="badge badge-blue" x-text="t.plugin"></span></td>
+                <td class="text-xs text-muted" x-text="t.description"></td>
+                <td><button class="btn btn-muted btn-sm" @click="toolTestName=t.name;toolTestParams='{}';toolTestResult=null">Test</button></td>
+              </tr>
+            </template>
+          </tbody>
+        </table>
+      </div>
+    </template>
+  </div>
+
+  <!-- Tool tester -->
+  <div class="card mb-16" x-show="toolTestName">
+    <div class="flex-between mb-8">
+      <h3 x-text="'Test: '+toolTestName"></h3>
+      <button class="btn btn-muted btn-sm" @click="toolTestName=''">Close</button>
+    </div>
+    <textarea x-model="toolTestParams" rows="3" placeholder='{"param": "value"}' style="font-family:'JetBrains Mono',monospace;font-size:12px"></textarea>
+    <div class="flex gap-8 mt-8">
+      <button class="btn btn-blue btn-sm" @click="runToolTest()">Run</button>
+    </div>
+    <template x-if="toolTestResult">
+      <div class="pre-wrap mt-8" x-text="JSON.stringify(toolTestResult,null,2)"></div>
+    </template>
+  </div>
+
   <!-- Performance metrics -->
   <div class="grid mb-16">
     <div class="card"><h3>Token Cost (24h)</h3>
@@ -1071,18 +1125,123 @@ SECTION_CHAT = """
 SECTION_CHANNELS = """
 <section x-show="tab==='channels'" x-cloak>
   <h2 class="mb-12">Channel Management</h2>
+
+  <!-- Multi-channel info -->
+  <div class="telemetry-bar mb-16">
+    <span class="pulse-dot"></span>
+    <span>Multi-channel sessions active \u2014 context is shared across all channels</span>
+    <span style="margin-left:auto" class="badge badge-blue" x-text="dmPolicy"></span>
+  </div>
+
+  <!-- Channel cards -->
   <div class="grid mb-16">
     <template x-for="(info,name) in channelStatus" :key="name">
       <div class="card">
-        <h3 x-text="name"></h3>
-        <span class="badge" :class="info.running?'badge-green':'badge-muted'" x-text="info.running?'running':'stopped'"></span>
-        <span class="badge badge-blue" x-show="info.configured">configured</span>
-        <div class="text-sm text-red mt-8" x-show="info.error" x-text="info.error"></div>
+        <div class="flex-between mb-8">
+          <h3 x-text="name" style="text-transform:capitalize"></h3>
+          <div class="flex gap-8">
+            <span class="badge" :class="info.running?'badge-green':'badge-muted'" x-text="info.running?'running':'stopped'"></span>
+            <span class="badge badge-blue" x-show="info.configured">configured</span>
+          </div>
+        </div>
+        <div class="text-sm text-red mb-8" x-show="info.error" x-text="info.error"></div>
+        <div class="flex gap-8">
+          <button class="btn btn-muted btn-sm" x-show="info.running" @click="sendTestMessage(name)">Send Test</button>
+          <button class="btn btn-blue btn-sm" x-show="name==='whatsapp'" @click="showWhatsAppQR()">Show QR Code</button>
+        </div>
+        <span class="text-xs text-green mt-4" x-show="channelTestResult[name]" x-text="channelTestResult[name]" style="display:block"></span>
       </div>
     </template>
     <div class="card" x-show="!Object.keys(channelStatus||{}).length">
-      <p class="text-muted">No channel adapters registered</p>
+      <p class="text-muted">No channel adapters registered \u2014 see setup guide below</p>
     </div>
+  </div>
+
+  <!-- WhatsApp QR Code modal -->
+  <div class="modal-bg" x-show="whatsappQR.show" x-cloak @click.self="whatsappQR.show=false">
+    <div class="modal" style="text-align:center;max-width:400px">
+      <h3>WhatsApp Pairing</h3>
+      <template x-if="whatsappQR.qr">
+        <div>
+          <p class="text-sm text-muted mb-12">Open WhatsApp on your phone \u2192 Linked Devices \u2192 Link a Device \u2192 Scan this QR code</p>
+          <div style="background:#fff;padding:16px;border-radius:8px;display:inline-block">
+            <canvas id="qrCanvas" width="256" height="256"></canvas>
+          </div>
+          <p class="text-xs text-muted mt-8">QR refreshes automatically. Keep this modal open until paired.</p>
+        </div>
+      </template>
+      <template x-if="whatsappQR.status==='WORKING'">
+        <div>
+          <div class="badge badge-green mb-8">Connected</div>
+          <p class="text-sm text-muted" x-text="'Number: '+whatsappQR.number"></p>
+          <p class="text-sm text-muted mt-4">Your self-chat messages are now handled by the bot.</p>
+        </div>
+      </template>
+      <template x-if="whatsappQR.error">
+        <p class="text-sm text-red" x-text="whatsappQR.error"></p>
+      </template>
+      <button class="btn btn-muted mt-12" @click="whatsappQR.show=false">Close</button>
+    </div>
+  </div>
+
+  <!-- Setup guides (collapsible) -->
+  <div class="card mb-16">
+    <details>
+      <summary style="cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--on-surface-variant)">Setup Guide: WhatsApp (recommended)</summary>
+      <div class="mt-12 text-sm" style="line-height:1.8">
+        <p><strong>Step 1:</strong> Start the WhatsApp bridge container:</p>
+        <pre class="pre-wrap mt-4 mb-8">docker compose -f docker-compose.yml -f docker-compose.whatsapp-web.yml up -d</pre>
+        <p><strong>Step 2:</strong> Come back to this page and click <strong>"Show QR Code"</strong> on the WhatsApp card above.</p>
+        <p><strong>Step 3:</strong> On your phone, open <strong>WhatsApp \u2192 Linked Devices \u2192 Link a Device</strong>.</p>
+        <p><strong>Step 4:</strong> Scan the QR code. The status will change to "Connected".</p>
+        <p><strong>Step 5:</strong> Send a message to <strong>yourself</strong> on WhatsApp (your own self-chat). The bot will respond!</p>
+        <p class="text-muted mt-8">The session persists across restarts. You only need to scan the QR code once.</p>
+      </div>
+    </details>
+  </div>
+  <div class="card mb-16">
+    <details>
+      <summary style="cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--on-surface-variant)">Setup Guide: Telegram</summary>
+      <div class="mt-12 text-sm" style="line-height:1.8">
+        <p><strong>Step 1:</strong> Open Telegram and search for <strong>@BotFather</strong>.</p>
+        <p><strong>Step 2:</strong> Send <code>/newbot</code>, choose a name and username. BotFather gives you a token like <code>7123456789:AAH...</code>.</p>
+        <p><strong>Step 3:</strong> Add to your <code>.env</code>:</p>
+        <pre class="pre-wrap mt-4 mb-8">TELEGRAM_BOT_TOKEN=7123456789:AAH...your-token</pre>
+        <p><strong>Step 4:</strong> Restart the bridge: <code>docker compose restart bridge</code></p>
+        <p><strong>Step 5:</strong> Open a DM with your bot on Telegram. It will ask for a pairing code.</p>
+        <p><strong>Step 6:</strong> Come back here, approve the pairing code in the "Pending Pairings" section below.</p>
+        <p class="text-muted mt-8">Optional: restrict to specific chats with <code>TELEGRAM_ALLOWED_CHAT_IDS=123456,789012</code>.</p>
+      </div>
+    </details>
+  </div>
+  <div class="card mb-16">
+    <details>
+      <summary style="cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--on-surface-variant)">Setup Guide: Discord</summary>
+      <div class="mt-12 text-sm" style="line-height:1.8">
+        <p><strong>Step 1:</strong> Go to the <a href="https://discord.com/developers/applications" target="_blank">Discord Developer Portal</a> and create a new Application.</p>
+        <p><strong>Step 2:</strong> Go to <strong>Bot</strong> tab \u2192 click <strong>Add Bot</strong> \u2192 copy the token.</p>
+        <p><strong>Step 3:</strong> Enable <strong>Message Content Intent</strong> under Privileged Gateway Intents.</p>
+        <p><strong>Step 4:</strong> Go to <strong>OAuth2 \u2192 URL Generator</strong>, select <code>bot</code> scope + <code>Send Messages</code> + <code>Read Messages</code> permissions. Copy the invite URL and add the bot to your server.</p>
+        <p><strong>Step 5:</strong> Add to your <code>.env</code>:</p>
+        <pre class="pre-wrap mt-4 mb-8">DISCORD_BOT_TOKEN=MTIz...your-token</pre>
+        <p><strong>Step 6:</strong> Restart: <code>docker compose restart bridge</code></p>
+        <p><strong>Step 7:</strong> Send a DM to your bot. Approve the pairing code here.</p>
+        <p class="text-muted mt-8">Optional: restrict to specific channels with <code>DISCORD_ALLOWED_CHANNEL_IDS=123456789</code>.</p>
+      </div>
+    </details>
+  </div>
+  <div class="card mb-16">
+    <details>
+      <summary style="cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--on-surface-variant)">Setup Guide: ntfy (notifications only)</summary>
+      <div class="mt-12 text-sm" style="line-height:1.8">
+        <p><strong>Step 1:</strong> Install the <a href="https://ntfy.sh" target="_blank">ntfy</a> app on your phone.</p>
+        <p><strong>Step 2:</strong> Subscribe to a topic (e.g. <code>my-nanobot-alerts</code>).</p>
+        <p><strong>Step 3:</strong> Add to your <code>.env</code>:</p>
+        <pre class="pre-wrap mt-4 mb-8">NOTIFICATION_WEBHOOK_URL=https://ntfy.sh/my-nanobot-alerts</pre>
+        <p><strong>Step 4:</strong> Restart: <code>docker compose restart bridge</code></p>
+        <p class="text-muted mt-8">ntfy is one-way (notifications only). Use it for morning briefings and alerts.</p>
+      </div>
+    </details>
   </div>
   <div class="card mb-16">
     <div class="flex-between mb-8">
@@ -1431,12 +1590,18 @@ SECTION_WORKFLOWS = """
 # ---------------------------------------------------------------------------
 SECTION_AGENTS = """
 <section x-show="tab==='agents'" x-cloak>
-  <h2 class="mb-12">Agent Status</h2>
-  <div class="grid">
-    <template x-for="a in agentList" :key="a.name">
+  <h2 class="mb-12">Agents & Sub-Agents</h2>
+
+  <!-- Built-in agents -->
+  <div class="text-xs text-muted mb-8" style="text-transform:uppercase;letter-spacing:.08em">Built-in Agents</div>
+  <div class="grid mb-16">
+    <template x-for="a in agentList.filter(a=>a.type!=='custom')" :key="a.name">
       <div class="card">
-        <h3 x-text="a.name" style="text-transform:none;font-size:0.875rem;color:var(--on-surface)"></h3>
-        <p class="text-xs text-muted mt-4" x-text="a.description"></p>
+        <div class="flex-between mb-4">
+          <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:0.875rem;color:var(--on-surface)" x-text="a.name"></span>
+          <span class="badge badge-muted">built-in</span>
+        </div>
+        <p class="text-xs text-muted" x-text="a.description"></p>
         <div class="mt-8 flex gap-8" x-show="a.tools?.length">
           <template x-for="t in (a.tools||[])" :key="t">
             <span class="badge badge-blue" x-text="t"></span>
@@ -1444,11 +1609,78 @@ SECTION_AGENTS = """
         </div>
       </div>
     </template>
-    <template x-if="!agentList?.length">
-      <div class="card"><p class="text-muted">No agents registered. Enable with AGENT_ORCHESTRATOR_ENABLED=true.</p></div>
-    </template>
   </div>
-  <div class="card mt-16">
+
+  <!-- Custom sub-agents -->
+  <div class="flex-between mb-8">
+    <div>
+      <div class="text-xs text-muted" style="text-transform:uppercase;letter-spacing:.08em">Custom Sub-Agents</div>
+      <p class="text-xs text-muted mt-4">Create specialized agents the orchestrator can delegate to automatically or on demand.</p>
+    </div>
+    <button class="btn btn-blue btn-sm" @click="showAgentForm=true;editingAgent=null;agentForm={name:'',description:'',system_prompt:'',forced_model:'',tools:[]}">+ New Sub-Agent</button>
+  </div>
+
+  <div class="grid mb-16">
+    <template x-for="a in customAgents" :key="a.id">
+      <div class="card" :style="!a.enabled?'opacity:0.5':''">
+        <div class="flex-between mb-4">
+          <span style="font-family:'Manrope',sans-serif;font-weight:700;font-size:0.875rem;color:var(--primary)" x-text="a.name"></span>
+          <div class="flex gap-8">
+            <span class="badge" :class="a.enabled?'badge-green':'badge-muted'" x-text="a.enabled?'active':'disabled'"></span>
+            <span class="badge badge-blue" x-show="a.forced_model" x-text="a.forced_model"></span>
+          </div>
+        </div>
+        <p class="text-xs text-muted mb-8" x-text="a.description"></p>
+        <div class="text-xs mono text-muted mb-8" x-show="a.system_prompt" x-text="a.system_prompt.substring(0,120)+'...'"></div>
+        <div class="flex gap-8">
+          <button class="btn btn-muted btn-sm" @click="editCustomAgent(a)">Edit</button>
+          <button class="btn btn-muted btn-sm" @click="toggleCustomAgent(a.id)">Toggle</button>
+          <button class="btn btn-red btn-sm" @click="deleteCustomAgent(a.id)">Delete</button>
+        </div>
+      </div>
+    </template>
+    <div class="card" x-show="!customAgents.length" style="border:2px dashed var(--ghost-border);text-align:center;padding:24px">
+      <p class="text-muted mb-8">No custom sub-agents yet</p>
+      <p class="text-xs text-muted">Create one to extend the orchestrator's capabilities.</p>
+    </div>
+  </div>
+
+  <!-- Agent create/edit form -->
+  <div class="card mb-16" x-show="showAgentForm" x-cloak>
+    <h3 x-text="editingAgent?'Edit Sub-Agent':'New Sub-Agent'"></h3>
+    <div class="form-row">
+      <label class="text-sm text-muted" style="width:120px">Name</label>
+      <input type="text" x-model="agentForm.name" placeholder="e.g. researcher, translator, code_reviewer" style="flex:1">
+    </div>
+    <div class="form-row">
+      <label class="text-sm text-muted" style="width:120px">Description</label>
+      <input type="text" x-model="agentForm.description" placeholder="One-line description of what this agent does" style="flex:1">
+    </div>
+    <div class="form-row">
+      <label class="text-sm text-muted" style="width:120px">Force Model</label>
+      <input type="text" x-model="agentForm.forced_model" placeholder="Leave empty for auto (e.g. gpt-4o, claude-sonnet-4-20250514)" style="flex:1">
+    </div>
+    <div style="margin-bottom:10px">
+      <label class="text-sm text-muted" style="display:block;margin-bottom:4px">System Prompt / Instructions</label>
+      <textarea x-model="agentForm.system_prompt" rows="6" style="font-family:'JetBrains Mono',monospace;font-size:12px"
+        placeholder="You are a specialized agent that..."></textarea>
+    </div>
+    <div style="margin-bottom:10px">
+      <label class="text-sm text-muted" style="display:block;margin-bottom:4px">Allowed Tools (select which tools this agent can use)</label>
+      <div class="flex gap-8" style="flex-wrap:wrap">
+        <template x-for="t in ['search_fn','ask_fn','remember_fn','shell_fn','web_fn','notify_fn']" :key="t">
+          <label class="text-xs"><input type="checkbox" :value="t" x-model="agentForm.tools"> <span x-text="t"></span></label>
+        </template>
+      </div>
+    </div>
+    <div class="flex gap-8">
+      <button class="btn btn-blue btn-sm" @click="saveCustomAgent()">Save</button>
+      <button class="btn btn-muted btn-sm" @click="showAgentForm=false">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Execution history -->
+  <div class="card">
     <h3>Recent Executions</h3>
     <table class="tbl">
       <tr><th>Time</th><th>Agent</th><th>Task</th><th>Status</th><th>Tokens</th><th>Est. Cost</th></tr>
@@ -1819,7 +2051,8 @@ function adminApp(){return{
   pipelineSteps:[],
 
   // --- Channels ---
-  channelStatus:{},pendingPairings:[],approvedUsers:[],dmPolicy:'pairing',
+  channelStatus:{},pendingPairings:[],approvedUsers:[],dmPolicy:'pairing',channelTestResult:{},
+  whatsappQR:{show:false,qr:'',status:'',number:'',error:''},
 
   // --- Shell ---
   pendingActions:[],actionHistory:[],elevatedCommands:{},proposeCmd:'',proposeDesc:'',proposeResult:'',
@@ -1837,7 +2070,8 @@ function adminApp(){return{
   workflows:[],
 
   // --- Agents (v10) ---
-  agentList:[],agentHistory:[],
+  agentList:[],agentHistory:[],customAgents:[],showAgentForm:false,editingAgent:null,
+  agentForm:{name:'',description:'',system_prompt:'',forced_model:'',tools:[]},
 
   // --- Advanced ---
   kgQuery:'',kgResult:null,piiText:'',piiResult:null,explainQuery:'',explainResult:null,
@@ -1847,6 +2081,14 @@ function adminApp(){return{
   modelTemp:0.7,modelTopP:0.9,modelMaxTokens:4096,modelToolUse:true,testConfigResult:'',
   systemPrompt:'',selectedKB:'',kbCollections:[],
   toolStats:{totalCost:0,totalCalls:0,modelsActive:0},
+  toolTestName:'',toolTestParams:'{}',toolTestResult:null,
+  builtinTools:[
+    {name:'search_fn',desc:'Semantic search across all collections'},
+    {name:'ask_fn',desc:'Search + LLM answer in one call'},
+    {name:'remember_fn',desc:'Store a memory in Qdrant'},
+    {name:'shell_fn',desc:'Run an approved shell command'},
+    {name:'web_fn',desc:'Fetch and extract text from a URL'},
+    {name:'notify_fn',desc:'Send a notification via webhook'}],
   docsList:[],docsTotal:0,docsOffset:0,docSearchFilter:'',uploadStatus:'',
   vdbMetrics:{totalChunks:0,totalDocs:0,docsStatus:''},
   ingestPipeline:{active:false,steps:[],detail:''},
@@ -1978,6 +2220,11 @@ function adminApp(){return{
           modelsActive:Object.keys(bm).length}}catch(e){}
     }catch(e){console.error('loadTools:',e)}
   },
+  async runToolTest(){
+    if(!this.toolTestName)return;this.toolTestResult=null;
+    try{const params=JSON.parse(this.toolTestParams||'{}');
+      this.toolTestResult=await this.api('/plugin-tool',{method:'POST',body:{tool_name:this.toolTestName,params}})
+    }catch(e){this.toolTestResult={error:e.message}}},
   async previewRoute(){
     if(!this.routePreviewTask)return;
     try{this.routePreviewResult=await this.api('/route-preview',{method:'POST',body:{task_type:this.routePreviewTask}})}catch(e){console.error(e)}
@@ -2083,6 +2330,27 @@ function adminApp(){return{
   },
   async approvePairing(code){try{await this.api('/channels/pair/'+code+'/approve',{method:'POST',body:{}});await this.loadChannels()}catch(e){alert('Error: '+e.message)}},
   async rejectPairing(code){try{await this.api('/channels/pair/'+code+'/reject',{method:'POST',body:{}});await this.loadChannels()}catch(e){alert('Error: '+e.message)}},
+  async sendTestMessage(channel){
+    this.channelTestResult[channel]='Sending...';
+    try{const r=await this.api('/channels/test',{method:'POST',body:{channel,message:'Test message from nanobot admin UI'}});
+      this.channelTestResult[channel]=r.ok?'Sent!':'Failed: '+(r.error||'unknown')}catch(e){this.channelTestResult[channel]='Error: '+e.message}},
+  async showWhatsAppQR(){
+    this.whatsappQR={show:true,qr:'',status:'',number:'',error:''};
+    const poll=async()=>{
+      try{
+        const st=await this.api('/webhooks/whatsapp/status');
+        this.whatsappQR.status=st.session_status||'';this.whatsappQR.number=st.my_number||'';
+        if(st.session_status==='WORKING'){this.whatsappQR.qr='';return}
+        const qr=await this.api('/webhooks/whatsapp/qr');
+        if(qr.ok&&qr.qr_value){
+          this.whatsappQR.qr=qr.qr_value;this.whatsappQR.error='';
+          this.$nextTick(()=>{if(typeof QRCode!=='undefined'){
+            const c=document.getElementById('qrCanvas');if(c){c.getContext('2d').clearRect(0,0,256,256);
+              QRCode.toCanvas(c,qr.qr_value,{width:256,margin:2,color:{dark:'#000',light:'#fff'}})}}})
+        }else{this.whatsappQR.error=qr.error||qr.detail||'Waiting for QR...'}
+      }catch(e){this.whatsappQR.error='Cannot reach WhatsApp bridge: '+e.message}
+      if(this.whatsappQR.show&&this.whatsappQR.status!=='WORKING')setTimeout(poll,3000)};
+    poll()},
   async revokeUser(pid){if(!confirm('Revoke access for '+pid+'?'))return;
     try{await this.api('/channels/pair/revoke',{method:'POST',body:{platform_id:pid}});await this.loadChannels()}catch(e){alert('Error: '+e.message)}},
 
@@ -2252,8 +2520,22 @@ function adminApp(){return{
 
   // === Agents (v10) ===
   async loadAgents(){
-    try{const[s,h]=await Promise.all([this.api('/agent/status'),this.api('/agent/history')]);
-      this.agentList=s.agents||[];this.agentHistory=h.executions||[]}catch(e){console.error('loadAgents:',e)}},
+    try{const[s,h,c]=await Promise.all([this.api('/agent/status'),this.api('/agent/history'),this.api('/agent/custom')]);
+      this.agentList=s.agents||[];this.agentHistory=h.executions||[];this.customAgents=c.agents||[]}catch(e){console.error('loadAgents:',e)}},
+  editCustomAgent(a){this.editingAgent=a;this.agentForm={name:a.name,description:a.description,
+    system_prompt:a.system_prompt||'',forced_model:a.forced_model||'',
+    tools:typeof a.tools==='string'?JSON.parse(a.tools):a.tools||[]};this.showAgentForm=true},
+  async saveCustomAgent(){
+    if(!this.agentForm.name.trim())return alert('Name is required');
+    try{const url=this.editingAgent?'/agent/custom/'+this.editingAgent.id:'/agent/custom';
+      const method=this.editingAgent?'PUT':'POST';
+      await this.api(url,{method,body:this.agentForm});
+      this.showAgentForm=false;await this.loadAgents()}catch(e){alert('Error: '+e.message)}},
+  async toggleCustomAgent(id){
+    try{await this.api('/agent/custom/'+id+'/toggle',{method:'POST'});await this.loadAgents()}catch(e){alert('Error: '+e.message)}},
+  async deleteCustomAgent(id){
+    if(!confirm('Delete this sub-agent?'))return;
+    try{await this.api('/agent/custom/'+id,{method:'DELETE'});await this.loadAgents()}catch(e){alert('Error: '+e.message)}},
   estimateAgentCost(tokens){
     if(!tokens)return'\u2014';
     const cost=(tokens/1000)*0.003;
@@ -2843,6 +3125,7 @@ if ('serviceWorker' in navigator) {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 {pwa_head}
 <style>{ADMIN_CSS}{MOBILE_CSS}</style>
 </head>

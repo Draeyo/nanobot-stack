@@ -9,6 +9,7 @@ Endpoints:
 from __future__ import annotations
 
 import logging
+import tarfile
 
 from fastapi import APIRouter, HTTPException
 
@@ -89,7 +90,7 @@ async def restore_backup(backup_id: str):
         raise HTTPException(status_code=404, detail=f"Backup {backup_id!r} not found")
     except Exception as exc:
         logger.exception("Restore failed for %s: %s", backup_id, exc)
-        raise HTTPException(status_code=500, detail=f"Restore failed: {exc}")
+        raise HTTPException(status_code=500, detail="Restore failed — check server logs")
 
 
 @router.post("/verify/{backup_id}")
@@ -117,5 +118,5 @@ def verify_backup(backup_id: str):
             "contents": members[:20],
             "size_bytes": os.path.getsize(path),
         }
-    except Exception as exc:
-        return {"ok": False, "backup_id": backup_id, "error": str(exc)}
+    except (tarfile.TarError, OSError) as exc:
+        return {"ok": False, "backup_id": backup_id, "error": type(exc).__name__}

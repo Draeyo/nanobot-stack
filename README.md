@@ -10,10 +10,10 @@
   <a href="#prerequisites">Prerequisites</a> •
   <a href="#installation">Installation</a> •
   <a href="#configuration">Configuration</a> •
+  <a href="#channel-setup">Channels</a> •
   <a href="#authentik-setup">Authentik Setup</a> •
   <a href="#admin-ui">Admin UI</a> •
   <a href="#usage">Usage</a> •
-  <a href="#roadmap">Roadmap</a> •
   <a href="#faq">FAQ</a> •
   <a href="#contributing">Contributing</a>
 </p>
@@ -22,10 +22,11 @@
 
 ## What is this?
 
-**nanobot-stack** is a one-command deployment script that sets up a complete, self-hosted AI assistant on your own server. Think of it as your private AI that:
+**nanobot-stack** is a self-hosted AI assistant that lives on your own server and talks to you wherever you are. Think of it as your private AI that:
 
+- **Talks to you on WhatsApp, Telegram, Discord** — Scan a QR code to connect your WhatsApp. Message your bot on Telegram or Discord. All channels share the same conversation — start on one, continue on another.
 - **Remembers everything** — It stores facts, decisions, and conversations in a vector database and recalls them automatically when relevant.
-- **Routes to the best model** — It picks the cheapest model that can handle each task (a quick rewrite doesn't need GPT-4) and falls back to alternatives if one provider is down. An adaptive router learns from feedback to improve routing over time.
+- **Routes to the best model** — It picks the cheapest model that can handle each task (a quick rewrite doesn't need GPT-4) and falls back to alternatives if one provider is down. An adaptive router learns from feedback over time.
 - **Uses tools** — It can run shell commands, fetch web pages, send notifications, execute code in a sandbox, and run multi-step plans with parallel execution.
 - **Understands context deeply** — HyDE query rewriting, knowledge graph relationships, sentiment detection, inline citations, and self-critique produce higher-quality answers.
 - **Works offline** — An optional local model (Ollama) keeps things running when your internet connection drops.
@@ -37,57 +38,72 @@ It bundles together several open-source projects into a cohesive stack:
 |-----------|------|
 | [nanobot](https://github.com/nanobot-ai/nanobot) | AI agent gateway (the "brain") |
 | [Qdrant](https://qdrant.tech/) | Vector database (the "memory") |
-| **RAG bridge** (included) | FastAPI service that connects everything — search, embeddings, model routing, tools |
+| **RAG bridge** (included) | FastAPI service that connects everything — search, embeddings, model routing, channels, tools |
+| [WAHA](https://waha.devlike.pro/) | WhatsApp Web bridge — connect your own phone number via QR code (optional) |
 | [Langfuse](https://langfuse.com/) | Observability and tracing (the "dashboard") |
 | [Ollama](https://ollama.com/) | Local model runner for offline fallback (optional) |
-| [Traefik](https://traefik.io/) | Reverse proxy with automatic TLS (you bring this) |
-| [Authentik](https://goauthentik.io/) | SSO and authentication (you bring this) |
+| [Traefik](https://traefik.io/) | Reverse proxy with automatic TLS (you bring this, or use the built-in one) |
+| [Authentik](https://goauthentik.io/) | SSO and authentication (optional) |
 
 ## Architecture
 
 ```
-Internet
-    │
-    ▼
-┌─────────────────────────────────────────────────┐
-│  Traefik (HTTPS, TLS certificates, auth)        │
-│  ai.yourdomain.com   rag.yourdomain.com   ...   │
-└──────┬─────────────┬──────────────┬─────────────┘
-       │             │              │
-       ▼             ▼              ▼
-  ┌─────────┐  ┌───────────┐  ┌──────────┐
-  │ nanobot │  │ RAG bridge│  │ Langfuse │
-  │ (agent) │◄─│ (FastAPI) │  │ (traces) │
-  └────┬────┘  └─┬───┬───┬─┘  └──────────┘
-       │  MCP    │   │   │
-       └─────────┘   │   ├──► Restricted shell
-                     │   ├──► Code interpreter (sandbox)
-                     │   ├──► Web fetcher
-                     │   ├──► Webhook notifications
-                     │   └──► Plugin system
-                     ▼
-   ┌──────────┐ ┌────────────┐ ┌─────────┐
-   │Knowledge │ │  Qdrant    │ │ Ollama  │
-   │  Graph   │ │  (vector   │ │ (local  │
-   │ (SQLite) │ │  database) │ │ models) │
-   └──────────┘ └────────────┘ └─────────┘
+         WhatsApp     Telegram     Discord        Web UI / API
+         (WAHA)       (polling)    (websocket)    (admin, PWA)
+            │             │            │               │
+            └──────┬──────┘──────┬─────┘               │
+                   ▼             ▼                     ▼
+              ┌─────────────────────────────────────────────┐
+              │  Traefik (HTTPS, TLS, Authentik SSO)        │
+              │  ai.yourdomain.com  rag.yourdomain.com      │
+              └──────────────────┬──────────────────────────┘
+                                 │
+                                 ▼
+              ┌──────────────────────────────────────┐
+              │        RAG Bridge (FastAPI)           │
+              │                                      │
+              │  ┌────────────┐  ┌───────────────┐   │
+              │  │  Channels  │  │  Smart-Chat   │   │
+              │  │  Manager   │  │  Pipeline     │   │
+              │  │ (unified   │  │  (classify →  │   │
+              │  │  sessions) │  │  HyDE → RAG → │   │
+              │  └──────┬─────┘  │  generate →   │   │
+              │         │        │  critique)    │   │
+              │         └───────►│               │   │
+              │                  └───────┬───────┘   │
+              │                          │           │
+              │  ┌───────┐ ┌─────────┐ ┌─┴────────┐ │
+              │  │ Trust │ │ Budget  │ │ Adaptive │ │
+              │  │Engine │ │Tracker  │ │ Router   │ │
+              │  └───────┘ └─────────┘ └──────────┘ │
+              │                                      │
+              │  Tools: shell, code, web, planner,   │
+              │         plugins, notifications       │
+              └──┬────────┬────────┬─────────────────┘
+                 │        │        │
+                 ▼        ▼        ▼
+          ┌──────────┐ ┌──────┐ ┌─────────┐ ┌──────────┐
+          │  Qdrant  │ │SQLite│ │ Ollama  │ │ Langfuse │
+          │ (vector  │ │(state│ │ (local  │ │ (traces) │
+          │ memory)  │ │ KG)  │ │ models) │ │          │
+          └──────────┘ └──────┘ └─────────┘ └──────────┘
 ```
 
 **How a question flows through the stack:**
 
-1. You ask a question via the web UI or API.
-2. **Working memory** tracks your session context (recent queries, topics, retrieved chunks).
+1. You send a message — via **WhatsApp** (self-chat), **Telegram**, **Discord**, the **admin UI**, or the **API**. All channels share the same conversation session.
+2. **Working memory** tracks your session context (recent queries, topics, retrieved chunks) — shared across all channels.
 3. **Sentiment detection** identifies tone and urgency to adapt the response style.
-4. The **RAG bridge** classifies your question (memory lookup? coding task? incident?).
+4. The **RAG bridge** classifies your question into one of 15 task types (memory lookup? coding task? incident? translation?).
 5. **HyDE rewriting** generates a hypothetical answer passage for better vector retrieval.
 6. Long conversations are **compressed** (summarized) to fit within context limits.
 7. It searches **Qdrant** for relevant memories/documents and **deduplicates** by embedding similarity.
 8. **Knowledge graph** lookups add entity relationships to the context.
 9. It injects context + your **user profile** + **inline citation instructions** into the prompt.
-10. The **adaptive router** picks the best model, learning from feedback over time.
+10. The **adaptive router** picks the best model based on task type, quality scores, and **budget pressure** — learning from feedback over time.
 11. If all cloud providers are down, it falls back to **Ollama** running locally.
 12. A **self-critique** pass reviews the answer for accuracy before delivery.
-13. The answer streams back in real time via **SSE**, with progress events for each step.
+13. The answer streams back in real time via **SSE** (web) or is sent directly to your messaging app, with progress events for each pipeline step.
 
 ## Features
 
@@ -138,13 +154,27 @@ Internet
 </details>
 
 <details>
+<summary><strong>Multi-channel messaging</strong> — Talk from anywhere, same conversation</summary>
+
+- **WhatsApp** (recommended): scan a QR code from the admin UI to link your own phone number — the bot responds in your self-chat (messages to yourself). No Meta Business API needed.
+- **Telegram**: create a bot via @BotFather, paste the token, DM your bot
+- **Discord**: create a bot in the Developer Portal, invite it to your server
+- **ntfy**: one-way push notifications for alerts and morning briefings
+- **Web Push**: browser notifications via the PWA
+- **Unified sessions**: context is shared across all channels — start a conversation on WhatsApp, continue it on Telegram. The agent sees the full history regardless of which platform you use.
+- **DM pairing gate**: new users must be approved by the admin before interacting (configurable: `pairing` or `open` mode)
+- **Step-by-step setup guides** built into the admin UI Channels tab
+- **Broadcast notifier**: fan-out delivery to all configured channels in a single call, with per-instance rate limiting
+</details>
+
+<details>
 <summary><strong>Proactive assistant</strong> — It works even when you don't ask</summary>
 
 - **Morning briefing**: a scheduled digest delivered every morning — system health, personal reminders, email summary, RSS highlights, and upcoming calendar events
 - **Email/Calendar sync**: connects to any IMAP server (TLS) and CalDAV/ICS calendar; emails and events are embedded into Qdrant for context-aware retrieval
 - **RSS/News ingestion**: subscribe to any RSS feed; articles are fetched, summarised (cheap model), and embedded every 30 minutes; included in the morning briefing
 - **Cron scheduler**: APScheduler-backed job engine with a REST API and Admin UI tab — define custom jobs beyond the built-in ones
-- **Broadcast notifier**: fan-out delivery over ntfy, Telegram, Discord, and WhatsApp in a single call
+- **Broadcast notifier**: fan-out delivery over ntfy, Telegram, Discord, and WhatsApp in a single call (rate-limited)
 - **Voice interface**: faster-whisper STT + Piper TTS — transcribe audio, synthesize speech, or run a full voice round-trip at `/api/voice/chat`
 </details>
 
@@ -270,11 +300,22 @@ If you **already have** Traefik running on the host, just point a dynamic config
 
 Optional overlays:
 ```bash
+# With WhatsApp (QR code pairing via WAHA — recommended)
+docker compose -f docker-compose.yml -f docker-compose.whatsapp-web.yml up -d
+
 # With voice (Piper TTS + Whisper STT)
 docker compose -f docker-compose.yml -f docker-compose.voice.yml up -d
 
 # With web search (SearXNG)
 docker compose -f docker-compose.yml -f docker-compose.searxng.yml up -d
+
+# All overlays at once
+docker compose \
+  -f docker-compose.yml \
+  -f docker-compose.whatsapp-web.yml \
+  -f docker-compose.voice.yml \
+  -f docker-compose.searxng.yml \
+  up -d
 ```
 
 ### Option B — Bare metal (systemd)
@@ -639,7 +680,7 @@ The admin UI has **16 tabs**, built with the "Neon Observatory" design system (t
 | **Knowledge Base** | Health badge, metrics cards (chunks/collections/documents), drag-and-drop upload zone, indexing pipeline visualization (UPLOAD→CHUNK→EMBED→STORE→SYNC), documents table with status/delete/pagination, collection browser, search tester |
 | **System Logs** | Log level filter buttons (ALL/INFO/WARNING/ERROR/DEBUG), method/path filters, download JSON export, connection status, paginated audit viewer |
 | **Chat Playground** | Active model display, SSE streaming with pipeline progress, formatting toolbar, agent internals panel (SSE events captured live), AI decision trace timeline with confidence scores, session controls, voice interface |
-| **Channels** | Adapter status cards (Telegram/Discord/WhatsApp), DM pairing management, approved users list |
+| **Channels** | Adapter status cards with Send Test button, WhatsApp QR code pairing modal, step-by-step setup guides (WhatsApp/Telegram/Discord/ntfy), DM pairing management, approved users, multi-channel session indicator |
 | **Elevated Shell** | Command allowlist, pending actions with approve/reject, action history, propose form |
 | **Config Writer** | Pending changes, syntax-colored diff viewer, change history with rollback |
 | **Trust Policies** | Trust level dropdowns per action type, auto-promote threshold controls, trust audit log with cancel button for pending entries |
@@ -649,6 +690,66 @@ The admin UI has **16 tabs**, built with the "Neon Observatory" design system (t
 | **Monitoring** | CPU/RAM/Disk/Network cards with progress bars, live 60-min resource history chart, 24h system load heatmap, critical alerts list |
 | **Advanced** | Knowledge Graph Explorer, PII Scanner, Pipeline Explainer, Working Memory stats |
 | **Scheduler** | Job list with cron/status/history, create/edit form with section checkboxes and channel selection, manual trigger |
+
+## Channel setup
+
+The admin UI at `/admin` → **Channels** tab has step-by-step setup guides with copy-pasteable commands. Here's a summary:
+
+### WhatsApp (recommended — your own phone number)
+
+```bash
+# 1. Start the WhatsApp Web bridge
+docker compose -f docker-compose.yml -f docker-compose.whatsapp-web.yml up -d
+
+# 2. Open the admin UI → Channels → click "Show QR Code"
+# 3. On your phone: WhatsApp → Linked Devices → Link a Device → scan the QR
+# 4. Send a message to yourself on WhatsApp — the bot responds!
+```
+
+The session persists across restarts. You only need to scan the QR code once. Messages in your self-chat (conversation with yourself) are handled by the bot.
+
+### Telegram
+
+```bash
+# 1. Open Telegram → search @BotFather → /newbot → get your token
+# 2. Add to .env:
+TELEGRAM_BOT_TOKEN=7123456789:AAH...your-token
+
+# 3. Restart: docker compose restart bridge
+# 4. DM your bot — it sends a pairing code
+# 5. Approve the code in admin UI → Channels → Pending Pairings
+```
+
+### Discord
+
+```bash
+# 1. Go to https://discord.com/developers/applications → New Application
+# 2. Bot tab → Add Bot → copy token
+# 3. Enable "Message Content Intent" under Privileged Gateway Intents
+# 4. OAuth2 → URL Generator → scope "bot" + permissions "Send/Read Messages"
+# 5. Invite bot to your server with the generated URL
+# 6. Add to .env:
+DISCORD_BOT_TOKEN=MTIz...your-token
+
+# 7. Restart: docker compose restart bridge
+# 8. DM the bot → approve pairing code in admin UI
+```
+
+### ntfy (notifications only)
+
+```bash
+# 1. Install ntfy app on your phone, subscribe to a topic
+# 2. Add to .env:
+NOTIFICATION_WEBHOOK_URL=https://ntfy.sh/my-nanobot-alerts
+
+# 3. Restart: docker compose restart bridge
+```
+
+### Multi-channel sessions
+
+All channels share the same conversation context. Start a conversation on WhatsApp, continue it on Telegram — the agent has the full history. This works because all approved users map to a single `"owner"` session (nanobot-stack is designed as a single-user system).
+
+---
 
 ## Usage
 
@@ -884,6 +985,7 @@ df -h /usr/share/ollama
 ```
 nanobot-stack/
 ├── docker-compose.yml            # Main stack (bridge + Qdrant + Traefik)
+├── docker-compose.whatsapp-web.yml # WhatsApp overlay (WAHA + QR code)
 ├── docker-compose.voice.yml      # Voice overlay (Piper + Whisper)
 ├── docker-compose.searxng.yml    # Web search overlay
 ├── CLAUDE.md                     # Developer guide & conventions

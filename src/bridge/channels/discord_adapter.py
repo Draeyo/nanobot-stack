@@ -1,6 +1,7 @@
 """Discord channel adapter using discord.py (soft import)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Any
@@ -75,7 +76,19 @@ class DiscordAdapter(ChannelAdapter):
                 await message.channel.send(chunk)
 
         logger.info("Discord adapter starting...")
-        await self._client.start(self._token)
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                await self._client.start(self._token)
+                break  # clean exit (stop() called)
+            except Exception as exc:
+                if attempt < max_retries - 1:
+                    wait = min(30, 5 * (attempt + 1))
+                    logger.warning("Discord connection failed (attempt %d/%d): %s — retrying in %ds",
+                                   attempt + 1, max_retries, exc, wait)
+                    await asyncio.sleep(wait)
+                else:
+                    logger.error("Discord adapter gave up after %d attempts: %s", max_retries, exc)
 
     async def stop(self) -> None:
         if self._client and not self._client.is_closed():

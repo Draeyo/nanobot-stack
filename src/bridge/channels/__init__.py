@@ -70,7 +70,9 @@ class ChannelAdapter(ABC):
         except ImportError:
             pass  # dm_pairing module not available — allow through
 
-        session_id = platform_id
+        # Unified multi-channel session: all approved users share "owner"
+        # so context flows across WhatsApp, Telegram, Discord seamlessly.
+        session_id = _resolve_unified_session(platform_id)
         messages = [{"role": "user", "content": text}]
 
         if not self._chat_fn:
@@ -85,6 +87,21 @@ class ChannelAdapter(ABC):
             logger.error("Channel %s chat error for user %s: %s",
                          platform_name, platform_user_id, exc)
             return "An error occurred while processing your message."
+
+
+def _resolve_unified_session(platform_id: str) -> str:
+    """Map a platform-specific ID to a unified session.
+
+    Single-user system: all approved users are the same person.
+    Session "owner" is shared across all channels so context is immediate.
+    """
+    try:
+        from dm_pairing import is_user_approved
+        if is_user_approved(platform_id):
+            return "owner"
+    except ImportError:
+        pass
+    return platform_id
 
 
 class ChannelManager:
@@ -132,6 +149,10 @@ class ChannelManager:
             if not task.done():
                 task.cancel()
         self._tasks.clear()
+
+    def get_adapter(self, name: str) -> ChannelAdapter | None:
+        """Return a registered adapter by name, or None."""
+        return self._adapters.get(name)
 
     def status(self) -> dict[str, Any]:
         """Return status of all registered adapters."""

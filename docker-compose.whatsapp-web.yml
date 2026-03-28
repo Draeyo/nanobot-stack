@@ -1,0 +1,54 @@
+# WhatsApp Web bridge via WAHA (WhatsApp HTTP API)
+#
+# Usage: docker compose -f docker-compose.yml -f docker-compose.whatsapp-web.yml up -d
+#
+# After startup:
+#   1. Go to /admin → Channels tab
+#   2. Click "Show QR Code" on the WhatsApp card
+#   3. Open WhatsApp on your phone → Linked Devices → Link a Device
+#   4. Scan the QR code
+#   5. Done! Messages in your self-chat are now handled by the bot
+#
+# The session persists across restarts (stored in waha_sessions volume).
+
+services:
+  waha:
+    image: devlikeapro/waha:latest
+    container_name: nanobot-waha
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:3000:3000"
+    volumes:
+      - waha_sessions:/app/.sessions
+    environment:
+      # Session auto-start
+      WHATSAPP_DEFAULT_ENGINE: "WEBJS"
+      WHATSAPP_START_SESSION: "default"
+      # Webhook: forward messages to the bridge
+      WHATSAPP_HOOK_URL: "http://bridge:8000/webhooks/whatsapp"
+      WHATSAPP_HOOK_EVENTS: "message"
+      # API key (optional but recommended)
+      WAHA_DASHBOARD_ENABLED: "false"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/sessions"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+
+  # Override bridge to connect to WAHA
+  bridge:
+    environment:
+      WAHA_URL: "http://waha:3000"
+      WHATSAPP_MODE: "waha"
+      WAHA_SESSION: "default"
+    depends_on:
+      waha:
+        condition: service_healthy
+
+volumes:
+  waha_sessions:
