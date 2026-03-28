@@ -1,0 +1,96 @@
+version: "3.9"
+
+# =============================================================================
+# nanobot-stack — main docker-compose for production deployment
+# =============================================================================
+# Usage:
+#   cp stack.env.example .env   # then edit with your values
+#   docker compose up -d
+#
+# Optional overlays:
+#   docker compose -f docker-compose.yml -f docker-compose.voice.yml up -d
+#   docker compose -f docker-compose.yml -f docker-compose.searxng.yml up -d
+# =============================================================================
+
+services:
+  # --- Qdrant vector database ---
+  qdrant:
+    image: qdrant/qdrant:v1.13.2
+    container_name: nanobot-qdrant
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      QDRANT__SERVICE__GRPC_PORT: "6334"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6333/healthz"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  # --- RAG Bridge (FastAPI core) ---
+  bridge:
+    build:
+      context: ./src/bridge
+      dockerfile: Dockerfile
+    container_name: nanobot-bridge
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - bridge_state:/app/state
+      - ./src/config:/app/config:ro
+    env_file:
+      - .env
+    environment:
+      STATE_DIR: /app/state
+      MODEL_ROUTER_FILE: /app/config/model_router.json
+      QDRANT_URL: http://qdrant:6333
+      AUDIT_LOG_PATH: /app/state/audit.jsonl
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import httpx; r=httpx.get('http://localhost:8000/healthz'); exit(0 if r.status_code==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+
+  # --- Traefik reverse proxy (optional, comment out if using nginx) ---
+  traefik:
+    image: traefik:v3.3
+    container_name: nanobot-traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_certs:/letsencrypt
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    profiles:
+      - with-traefik
+
+volumes:
+  qdrant_data:
+  bridge_state:
+  traefik_certs:

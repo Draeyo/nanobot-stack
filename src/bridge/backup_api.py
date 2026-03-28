@@ -67,3 +67,55 @@ def delete_backup(backup_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail=f"Backup {backup_id!r} not found")
     return {"deleted": True, "backup_id": backup_id}
+
+
+@router.post("/restore/{backup_id}")
+async def restore_backup(backup_id: str):
+    """Restore from a specific backup archive.
+
+    This will:
+    1. Stop accepting new requests (via a global flag)
+    2. Restore Qdrant collections from snapshots
+    3. Restore SQLite databases from the archive
+    4. Log the restore event
+    """
+    mgr = _get_manager()
+    if not hasattr(mgr, "restore_backup"):
+        raise HTTPException(status_code=501, detail="Restore not implemented in BackupManager")
+    try:
+        result = await mgr.restore_backup(backup_id)
+        return result
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail=f"Backup {backup_id!r} not found")
+    except Exception as exc:
+        logger.exception("Restore failed for %s: %s", backup_id, exc)
+        raise HTTPException(status_code=500, detail=f"Restore failed: {exc}")
+
+
+@router.post("/verify/{backup_id}")
+def verify_backup(backup_id: str):
+    """Verify backup archive integrity (check tar, encryption, contents)."""
+    mgr = _get_manager()
+    backups = mgr.list_backups()
+    backup = next((b for b in backups if b.get("backup_id") == backup_id), None)
+    if not backup:
+        raise HTTPException(status_code=404, detail=f"Backup {backup_id!r} not found")
+
+    import os
+    import tarfile
+    path = backup.get("archive_path", "")
+    if not path or not os.path.exists(path):
+        return {"ok": False, "backup_id": backup_id, "error": "archive file missing"}
+
+    try:
+        with tarfile.open(path, "r:gz") as tar:
+            members = tar.getnames()
+        return {
+            "ok": True,
+            "backup_id": backup_id,
+            "files": len(members),
+            "contents": members[:20],
+            "size_bytes": os.path.getsize(path),
+        }
+    except Exception as exc:
+        return {"ok": False, "backup_id": backup_id, "error": str(exc)}

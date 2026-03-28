@@ -183,7 +183,32 @@ if ENCRYPTION_ENABLED or ENCRYPTION_SQLITE_ENABLED or ENCRYPTION_QDRANT_ENABLED_
 # ---------------------------------------------------------------------------
 # FastAPI app with middlewares
 # ---------------------------------------------------------------------------
-app = FastAPI(title="nanobot-rag-bridge-v9")
+app = FastAPI(title="nanobot-rag-bridge-v9", docs_url="/docs", redoc_url="/redoc")
+
+# CORS — deny by default, allow same-origin only
+from fastapi.middleware.cors import CORSMiddleware
+_cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Request-ID middleware for log correlation
+import uuid as _uuid
+from starlette.middleware.base import BaseHTTPMiddleware as _BHTTP
+
+class _RequestIDMiddleware(_BHTTP):
+    async def dispatch(self, request, call_next):
+        rid = request.headers.get("X-Request-ID", _uuid.uuid4().hex[:12])
+        request.state.request_id = rid
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = rid
+        return response
+
+app.add_middleware(_RequestIDMiddleware)
 
 # Static files for PWA assets (manifest, sw.js, icons)
 _static_dir = pathlib.Path(__file__).parent / "static"
@@ -202,13 +227,10 @@ try:
 except ImportError:
     logger.info("prometheus-fastapi-instrumentator not installed, /metrics disabled")
 
-# Audit log middleware
-try:
-    from audit import AuditLogMiddleware
-    app.add_middleware(AuditLogMiddleware)
-    logger.info("Audit log middleware enabled")
-except Exception as exc:
-    logger.warning("Audit log middleware not loaded: %s", exc)
+# Audit log middleware (mandatory for production)
+from audit import AuditLogMiddleware
+app.add_middleware(AuditLogMiddleware)
+logger.info("Audit log middleware enabled")
 
 # Shutdown hook: persist token stats and stop file watcher
 _local_doc_watcher = None  # may be replaced in Sub-project E setup below
@@ -245,8 +267,9 @@ COLLECTION_DIR_MAP = {
 def verify_token(request: Request):
     if not BRIDGE_TOKEN:
         return
+    import hmac
     header = request.headers.get("X-Bridge-Token", "")
-    if header != BRIDGE_TOKEN:
+    if not hmac.compare_digest(header, BRIDGE_TOKEN):
         raise HTTPException(status_code=401, detail="invalid or missing X-Bridge-Token")
 
 # ---------------------------------------------------------------------------
@@ -513,7 +536,12 @@ def run_chat_task(
                 models_in_chain.append(p.get("model", pn))
             except Exception:
                 models_in_chain.append(pn)
-        ranked_models = adaptive_router.get_model_ranking(task_type, models_in_chain)
+        try:
+            from token_budget import get_budget_pressure
+            _bp = get_budget_pressure()
+        except Exception:
+            _bp = 0.0
+        ranked_models = adaptive_router.get_model_ranking(task_type, models_in_chain, budget_pressure=_bp)
         if ranked_models != models_in_chain:
             model_to_profile = {m: pn for pn, m in zip(chain, models_in_chain)}
             chain = [model_to_profile[m] for m in ranked_models if m in model_to_profile]
@@ -963,30 +991,30 @@ def _background_ingest():
 # Pydantic models
 # ---------------------------------------------------------------------------
 class SearchIn(BaseModel):
-    query: str
-    collections: list[str] = Field(default_factory=list)
-    tags: list[str] = Field(default_factory=list)
-    limit: int = 5
-    source_name: str | None = None
-    source_path_prefix: str | None = None
+    query: str = Field(..., max_length=2000)
+    collections: list[str] = Field(default_factory=list, max_length=20)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    limit: int = Field(5, ge=1, le=50)
+    source_name: str | None = Field(None, max_length=200)
+    source_path_prefix: str | None = Field(None, max_length=500)
 
 class RememberIn(BaseModel):
-    text: str
-    collection: str = "memory_personal"
-    subject: str | None = None
-    tags: list[str] = Field(default_factory=list)
-    source: str = "nanobot"
+    text: str = Field(..., max_length=50000)
+    collection: str = Field("memory_personal", max_length=100)
+    subject: str | None = Field(None, max_length=500)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    source: str = Field("nanobot", max_length=100)
     summarize: bool = True
 
 class AskIn(BaseModel):
-    question: str
-    collections: list[str] = Field(default_factory=list)
-    tags: list[str] = Field(default_factory=list)
-    limit: int = 6
-    answer_task: str = DEFAULT_ANSWER_TASK
+    question: str = Field(..., max_length=5000)
+    collections: list[str] = Field(default_factory=list, max_length=20)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    limit: int = Field(6, ge=1, le=50)
+    answer_task: str = Field(DEFAULT_ANSWER_TASK, max_length=100)
 
 class RoutePreviewIn(BaseModel):
-    task_type: str
+    task_type: str = Field(..., max_length=100)
 
 # ---------------------------------------------------------------------------
 # Endpoints
@@ -1099,8 +1127,9 @@ def search(body: SearchIn):
     return {"query": body.query, "results": reranked, "embedding_attempts": embedding_attempts, "collections": collections}
 
 @app.post("/remember", dependencies=[Depends(verify_token)])
-def remember(body: RememberIn):
-    rate_limiters.check("remember")
+def remember(body: RememberIn, request: Request):
+    from rate_limiter import extract_user_id
+    rate_limiters.check_per_user("remember", extract_user_id(request))
     final_text = normalize_whitespace(body.text)
 
     # PII filtering before storage
@@ -1186,13 +1215,16 @@ def ask(body: AskIn):
     )
     return {"question": body.question, "answer": answer["text"], "answer_attempts": answer["attempts"], "results": retrieved["results"], "embedding_attempts": retrieved["embedding_attempts"]}
 
+class ChatIn(BaseModel):
+    task_type: str = Field("fallback_general", max_length=100)
+    messages: list[dict[str, str]] = Field(..., max_length=100)
+    json_mode: bool = False
+
 @app.post("/chat", dependencies=[Depends(verify_token)])
-def chat(body: dict[str, Any]):
-    task_type = body.get("task_type", "fallback_general")
-    messages = body.get("messages", [])
-    if not messages:
+def chat(body: ChatIn):
+    if not body.messages:
         raise HTTPException(status_code=400, detail="messages are required")
-    return run_chat_task(task_type, messages, json_mode=bool(body.get("json_mode", False)))
+    return run_chat_task(body.task_type, body.messages, json_mode=body.json_mode)
 
 @app.post("/ingest", dependencies=[Depends(verify_token)])
 def ingest():
