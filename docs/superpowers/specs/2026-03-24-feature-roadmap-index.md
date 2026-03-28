@@ -151,7 +151,7 @@ Spec : [`2026-03-24-semantic-cache-token-budget-routing.md`](2026-03-24-semantic
 ### Sous-projet A — Scheduler & Briefing Matinal ✅
 
 Spec : [`2026-03-23-scheduler-briefing-design.md`](2026-03-23-scheduler-briefing-design.md)
-Plan : [`../plans/2026-03-23-scheduler-briefing.md`](../plans/2026-03-23-scheduler-briefing.md)
+<!-- Plan archivé — voir historique git -->
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -168,7 +168,7 @@ Plan : [`../plans/2026-03-23-scheduler-briefing.md`](../plans/2026-03-23-schedul
 ### Sous-projet B — Intégration Email/Calendrier ✅
 
 Spec : [`2026-03-24-sub-project-b-email-calendar.md`](2026-03-24-sub-project-b-email-calendar.md)
-Plan : [`../plans/2026-03-24-sub-project-b-email-calendar.md`](../plans/2026-03-24-sub-project-b-email-calendar.md)
+<!-- Plan archivé — voir historique git -->
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -185,7 +185,7 @@ Plan : [`../plans/2026-03-24-sub-project-b-email-calendar.md`](../plans/2026-03-
 ### Sous-projet C — Ingestion RSS/News ✅
 
 Spec : [`2026-03-24-sub-project-c-rss-ingestion.md`](2026-03-24-sub-project-c-rss-ingestion.md)
-Plan : [`../plans/2026-03-24-sub-project-c-rss-ingestion.md`](../plans/2026-03-24-sub-project-c-rss-ingestion.md)
+<!-- Plan archivé — voir historique git -->
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -204,7 +204,7 @@ Plan : [`../plans/2026-03-24-sub-project-c-rss-ingestion.md`](../plans/2026-03-2
 
 ## Phase 4 — Features Avancées ✅ Implémentées
 
-### 4.1 Admin UI v2 — Onglets manquants 🔧
+### 4.1 Admin UI v2 — Onglets manquants ✅
 
 Spec : [`2026-03-24-admin-ui-v2.md`](2026-03-24-admin-ui-v2.md)
 
@@ -212,10 +212,10 @@ Les onglets suivants sont spécifiés dans le v10 evolution design mais pas enco
 
 | Onglet | Contenu | Statut |
 |--------|---------|--------|
-| Trust Policies | Table des actions, dropdowns trust level, auto-promotion controls | 🔧 |
-| Cost Dashboard | Chart.js temps-réel, breakdown jour/semaine par modèle, projection mensuelle | 🔧 |
-| Procedural Workflows | Liste workflows appris, confiance, toggles replay | 🔧 |
-| Agent Status | Agents disponibles, exécutions récentes, coût par agent | 🔧 |
+| Trust Policies | Table des actions, dropdowns trust level, auto-promotion controls | ✅ |
+| Cost Dashboard | Chart.js temps-réel, breakdown jour/semaine par modèle, projection mensuelle | ✅ |
+| Procedural Workflows | Liste workflows appris, confiance, toggles replay | ✅ |
+| Agent Status | Agents disponibles, exécutions récentes, coût par agent | ✅ |
 
 ### 4.2 Sous-projet D — Recherche Web (SearXNG) ✅
 
@@ -249,7 +249,7 @@ Mergé sur `main` — **125 tests ✅ pylint 10.00/10**
 ### 4.4 Sous-projet F — Backup & Restore Automatique ✅
 
 Spec : [`2026-03-24-sub-project-f-backup-restore.md`](2026-03-24-sub-project-f-backup-restore.md)
-Plan : [`../plans/2026-03-24-sub-project-f-backup-restore.md`](../plans/2026-03-24-sub-project-f-backup-restore.md)
+<!-- Plan archivé — voir historique git -->
 
 | Feature | Fichier | Statut | Description |
 |---------|---------|--------|-------------|
@@ -463,14 +463,14 @@ Mergé sur `main` — **396 tests ✅ pylint 10.00/10**
 | 011 | `scheduled_jobs`, `job_runs` | A | ✅ main |
 | 012 | `email_sync_log` | B | ✅ main |
 | 013 | `rss_feeds`, `rss_entries` | C | ✅ main |
-| 014 | `web_search_log` | D | 🔧 PR |
+| 014 | `web_search_log` | D | ✅ |
 | 015 | `backup_log` | F | ✅ main |
-| 016 | `docs_ingestion_log` | E | 🔧 PR |
+| 016 | `docs_ingestion_log` | E | ✅ |
 | 017 | `voice_sessions` | G | ✅ main |
 | 018 | `memory_decay_log`, `routing_adjustments` | H | ✅ main |
-| 019 | `push_subscriptions` | I | 🔧 PR |
-| 020 | `github_sync_log`, `obsidian_index` | J | 🔧 PR |
-| 021 | `browser_action_log` | K | 🔧 PR |
+| 019 | `push_subscriptions` | I | ✅ |
+| 020 | `github_sync_log`, `obsidian_index` | J | ✅ |
+| 021 | `browser_action_log` | K | ✅ |
 
 ---
 
@@ -481,14 +481,14 @@ Mergé sur `main` — **396 tests ✅ pylint 10.00/10**
 ✅ Sous-projet A — Scheduler/Briefing (implémenté, mergé)
 ✅ Sous-projet B — Email/Calendrier       [implémenté — 18 tests]
 ✅ Sous-projet C — RSS/News               [implémenté — 19 tests]
-🔧 Admin UI v2 (4 onglets manquants)      [priorité haute — branche: feature/admin-ui-v2]
-🔧 Sous-projet D — Recherche Web          [implémenté — 157 tests — PR ouverte: feature/sub-d-web-search]
-🔧 Sous-projet E — Ingestion Docs         [implémenté — 125 tests — PR ouverte: feature/sub-e-local-docs]
-✅ Sous-projet F — Backup & Restore       [implémenté — 11 tests]
-✅ Sous-projet G — Interface Vocale       [implémenté — 126 tests — mergé sur main]
-✅ Sous-projet H — Memory Decay           [implémenté — 186 tests — mergé sur main]
-🔧 Sous-projet I — PWA Mobile             [implémenté — PR ouverte: feature/sub-i-pwa]
-🔧 Sous-projet J — Intégrations Dev       [implémenté — PR ouverte: feature/sub-j-dev-integrations]
-🔧 Sous-projet K — Browser Automation     [implémenté — 357 tests — PR ouverte: feature/sub-k-browser-automation]
-🔧 Sous-projet L — Chiffrement At-Rest    [implémenté — 396 tests — PR ouverte: feature/sub-l-encryption-at-rest]
+✅ Admin UI v2 (16 onglets — Neon Observatory design)  [mergé sur main]
+✅ Sous-projet D — Recherche Web          [mergé sur main]
+✅ Sous-projet E — Ingestion Docs         [mergé sur main]
+✅ Sous-projet F — Backup & Restore       [mergé sur main]
+✅ Sous-projet G — Interface Vocale       [mergé sur main]
+✅ Sous-projet H — Memory Decay           [mergé sur main]
+✅ Sous-projet I — PWA Mobile             [mergé sur main]
+✅ Sous-projet J — Intégrations Dev       [mergé sur main]
+✅ Sous-projet K — Browser Automation     [mergé sur main]
+✅ Sous-projet L — Chiffrement At-Rest    [mergé sur main]
 ```

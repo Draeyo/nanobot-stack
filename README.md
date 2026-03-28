@@ -419,7 +419,9 @@ cat /opt/nanobot-stack/rag-bridge/.bridge_token
 
 ## Configuration
 
-All configuration lives in `stack.env` (git-ignored — your settings never end up in the repo).
+All configuration lives in a single env file (git-ignored — your settings never end up in the repo):
+- **Docker**: `.env` (read by `docker compose`)
+- **Bare metal**: `stack.env` (read by `deploy.sh`)
 
 ### Minimal configuration
 

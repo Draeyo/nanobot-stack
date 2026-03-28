@@ -1,7 +1,7 @@
 # Spec : Cache Sémantique, Budget Tokens & Routing Local-First
 
 **Date :** 2026-03-24
-**Statut :** Implémenté ✅ (routing local-first 🔧 partiel)
+**Statut :** Implémenté ✅
 **Projet :** nanobot-stack v10
 **Scope :** Cache LLM L2 par similarité, budget tokens/coûts, classificateur étendu, downgrade automatique
 
@@ -200,9 +200,9 @@ def get_model_ranking(task_type: str, candidates: list[str],
 | `semantic_cache.py` + `SemanticCache` class | ✅ |
 | `token_budget.py` + tracking + enforcement | ✅ |
 | Classificateur 15 types | ✅ |
-| Routes local-first `model_router.json` | 🔧 |
-| `budget_pressure` dans `adaptive_router.py` | 🔧 |
-| Onglet Cost Dashboard Admin UI | 🔧 |
+| Routes local-first `model_router.json` | ✅ |
+| `budget_pressure` dans `adaptive_router.py` | ✅ |
+| Onglet Cost Dashboard Admin UI | ✅ |
 
 ---
 
