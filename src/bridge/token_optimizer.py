@@ -208,9 +208,32 @@ class TokenTracker:
     def stats(self) -> dict:
         with self._lock:
             entries = list(self._data.values())
+            # Aggregate by model
+            by_model: dict[str, dict] = {}
+            for e in entries:
+                m = e["model"]
+                if m not in by_model:
+                    by_model[m] = {"model": m, "calls": 0, "input_tokens": 0, "output_tokens": 0, "cost": 0.0}
+                by_model[m]["calls"] += e["calls"]
+                by_model[m]["input_tokens"] += e["input_tokens"]
+                by_model[m]["output_tokens"] += e["output_tokens"]
+                by_model[m]["cost"] += e["cost_usd"]
+            # Aggregate by endpoint (tool)
+            by_endpoint: dict[str, dict] = {}
+            for e in entries:
+                ep = e["endpoint"]
+                if ep not in by_endpoint:
+                    by_endpoint[ep] = {"endpoint": ep, "calls": 0, "cost": 0.0}
+                by_endpoint[ep]["calls"] += e["calls"]
+                by_endpoint[ep]["cost"] += e["cost_usd"]
             return {
                 "total_calls": sum(e["calls"] for e in entries),
                 "total_cost_usd": round(sum(e["cost_usd"] for e in entries), 4),
+                "total_tokens": sum(e["input_tokens"] + e["output_tokens"] for e in entries),
+                "total_input_tokens": sum(e["input_tokens"] for e in entries),
+                "total_output_tokens": sum(e["output_tokens"] for e in entries),
+                "by_model": sorted(by_model.values(), key=lambda x: x["cost"], reverse=True),
+                "by_endpoint": sorted(by_endpoint.values(), key=lambda x: x["calls"], reverse=True),
                 "by_endpoint_model": sorted(entries, key=lambda x: x["cost_usd"], reverse=True),
             }
 

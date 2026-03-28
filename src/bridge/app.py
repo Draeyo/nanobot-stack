@@ -1680,3 +1680,20 @@ try:
     logger.info("Encryption endpoints mounted (/api/encryption/*)")
 except Exception as exc:  # pylint: disable=broad-except
     logger.info("Encryption API not loaded: %s", exc)
+
+# --- System Metrics (Monitoring tab) ---
+try:
+    from system_metrics import router as metrics_router, record_sample as _metrics_sample
+    app.include_router(metrics_router, dependencies=[Depends(verify_token)])
+    # Record a sample every 60s via APScheduler (already imported for scheduler)
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler as _BGSched
+        _metrics_scheduler = _BGSched(daemon=True)
+        _metrics_scheduler.add_job(_metrics_sample, "interval", seconds=60)
+        _metrics_scheduler.start()
+    except Exception:
+        pass  # Scheduler not available — samples taken on-demand only
+    _metrics_sample()  # Initial sample
+    logger.info("System metrics endpoints mounted (/api/metrics/*)")
+except Exception as exc:  # pylint: disable=broad-except
+    logger.info("System metrics not loaded: %s", exc)
