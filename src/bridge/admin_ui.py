@@ -1071,25 +1071,123 @@ SECTION_CHAT = """
 SECTION_CHANNELS = """
 <section x-show="tab==='channels'" x-cloak>
   <h2 class="mb-12">Channel Management</h2>
+
+  <!-- Multi-channel info -->
+  <div class="telemetry-bar mb-16">
+    <span class="pulse-dot"></span>
+    <span>Multi-channel sessions active \u2014 context is shared across all channels</span>
+    <span style="margin-left:auto" class="badge badge-blue" x-text="dmPolicy"></span>
+  </div>
+
+  <!-- Channel cards -->
   <div class="grid mb-16">
     <template x-for="(info,name) in channelStatus" :key="name">
       <div class="card">
         <div class="flex-between mb-8">
-          <h3 x-text="name"></h3>
+          <h3 x-text="name" style="text-transform:capitalize"></h3>
           <div class="flex gap-8">
             <span class="badge" :class="info.running?'badge-green':'badge-muted'" x-text="info.running?'running':'stopped'"></span>
             <span class="badge badge-blue" x-show="info.configured">configured</span>
           </div>
         </div>
         <div class="text-sm text-red mb-8" x-show="info.error" x-text="info.error"></div>
-        <button class="btn btn-muted btn-sm" x-show="info.running"
-          @click="sendTestMessage(name)">Send Test</button>
-        <span class="text-xs text-green" x-show="channelTestResult[name]" x-text="channelTestResult[name]"></span>
+        <div class="flex gap-8">
+          <button class="btn btn-muted btn-sm" x-show="info.running" @click="sendTestMessage(name)">Send Test</button>
+          <button class="btn btn-blue btn-sm" x-show="name==='whatsapp'" @click="showWhatsAppQR()">Show QR Code</button>
+        </div>
+        <span class="text-xs text-green mt-4" x-show="channelTestResult[name]" x-text="channelTestResult[name]" style="display:block"></span>
       </div>
     </template>
     <div class="card" x-show="!Object.keys(channelStatus||{}).length">
-      <p class="text-muted">No channel adapters registered</p>
+      <p class="text-muted">No channel adapters registered \u2014 see setup guide below</p>
     </div>
+  </div>
+
+  <!-- WhatsApp QR Code modal -->
+  <div class="modal-bg" x-show="whatsappQR.show" x-cloak @click.self="whatsappQR.show=false">
+    <div class="modal" style="text-align:center;max-width:400px">
+      <h3>WhatsApp Pairing</h3>
+      <template x-if="whatsappQR.qr">
+        <div>
+          <p class="text-sm text-muted mb-12">Open WhatsApp on your phone \u2192 Linked Devices \u2192 Link a Device \u2192 Scan this QR code</p>
+          <div style="background:#fff;padding:16px;border-radius:8px;display:inline-block">
+            <canvas id="qrCanvas" width="256" height="256"></canvas>
+          </div>
+          <p class="text-xs text-muted mt-8">QR refreshes automatically. Keep this modal open until paired.</p>
+        </div>
+      </template>
+      <template x-if="whatsappQR.status==='WORKING'">
+        <div>
+          <div class="badge badge-green mb-8">Connected</div>
+          <p class="text-sm text-muted" x-text="'Number: '+whatsappQR.number"></p>
+          <p class="text-sm text-muted mt-4">Your self-chat messages are now handled by the bot.</p>
+        </div>
+      </template>
+      <template x-if="whatsappQR.error">
+        <p class="text-sm text-red" x-text="whatsappQR.error"></p>
+      </template>
+      <button class="btn btn-muted mt-12" @click="whatsappQR.show=false">Close</button>
+    </div>
+  </div>
+
+  <!-- Setup guides (collapsible) -->
+  <div class="card mb-16">
+    <details>
+      <summary style="cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--on-surface-variant)">Setup Guide: WhatsApp (recommended)</summary>
+      <div class="mt-12 text-sm" style="line-height:1.8">
+        <p><strong>Step 1:</strong> Start the WhatsApp bridge container:</p>
+        <pre class="pre-wrap mt-4 mb-8">docker compose -f docker-compose.yml -f docker-compose.whatsapp-web.yml up -d</pre>
+        <p><strong>Step 2:</strong> Come back to this page and click <strong>"Show QR Code"</strong> on the WhatsApp card above.</p>
+        <p><strong>Step 3:</strong> On your phone, open <strong>WhatsApp \u2192 Linked Devices \u2192 Link a Device</strong>.</p>
+        <p><strong>Step 4:</strong> Scan the QR code. The status will change to "Connected".</p>
+        <p><strong>Step 5:</strong> Send a message to <strong>yourself</strong> on WhatsApp (your own self-chat). The bot will respond!</p>
+        <p class="text-muted mt-8">The session persists across restarts. You only need to scan the QR code once.</p>
+      </div>
+    </details>
+  </div>
+  <div class="card mb-16">
+    <details>
+      <summary style="cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--on-surface-variant)">Setup Guide: Telegram</summary>
+      <div class="mt-12 text-sm" style="line-height:1.8">
+        <p><strong>Step 1:</strong> Open Telegram and search for <strong>@BotFather</strong>.</p>
+        <p><strong>Step 2:</strong> Send <code>/newbot</code>, choose a name and username. BotFather gives you a token like <code>7123456789:AAH...</code>.</p>
+        <p><strong>Step 3:</strong> Add to your <code>.env</code>:</p>
+        <pre class="pre-wrap mt-4 mb-8">TELEGRAM_BOT_TOKEN=7123456789:AAH...your-token</pre>
+        <p><strong>Step 4:</strong> Restart the bridge: <code>docker compose restart bridge</code></p>
+        <p><strong>Step 5:</strong> Open a DM with your bot on Telegram. It will ask for a pairing code.</p>
+        <p><strong>Step 6:</strong> Come back here, approve the pairing code in the "Pending Pairings" section below.</p>
+        <p class="text-muted mt-8">Optional: restrict to specific chats with <code>TELEGRAM_ALLOWED_CHAT_IDS=123456,789012</code>.</p>
+      </div>
+    </details>
+  </div>
+  <div class="card mb-16">
+    <details>
+      <summary style="cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--on-surface-variant)">Setup Guide: Discord</summary>
+      <div class="mt-12 text-sm" style="line-height:1.8">
+        <p><strong>Step 1:</strong> Go to the <a href="https://discord.com/developers/applications" target="_blank">Discord Developer Portal</a> and create a new Application.</p>
+        <p><strong>Step 2:</strong> Go to <strong>Bot</strong> tab \u2192 click <strong>Add Bot</strong> \u2192 copy the token.</p>
+        <p><strong>Step 3:</strong> Enable <strong>Message Content Intent</strong> under Privileged Gateway Intents.</p>
+        <p><strong>Step 4:</strong> Go to <strong>OAuth2 \u2192 URL Generator</strong>, select <code>bot</code> scope + <code>Send Messages</code> + <code>Read Messages</code> permissions. Copy the invite URL and add the bot to your server.</p>
+        <p><strong>Step 5:</strong> Add to your <code>.env</code>:</p>
+        <pre class="pre-wrap mt-4 mb-8">DISCORD_BOT_TOKEN=MTIz...your-token</pre>
+        <p><strong>Step 6:</strong> Restart: <code>docker compose restart bridge</code></p>
+        <p><strong>Step 7:</strong> Send a DM to your bot. Approve the pairing code here.</p>
+        <p class="text-muted mt-8">Optional: restrict to specific channels with <code>DISCORD_ALLOWED_CHANNEL_IDS=123456789</code>.</p>
+      </div>
+    </details>
+  </div>
+  <div class="card mb-16">
+    <details>
+      <summary style="cursor:pointer;font-family:'Space Grotesk',sans-serif;font-weight:600;font-size:0.75rem;text-transform:uppercase;letter-spacing:.08em;color:var(--on-surface-variant)">Setup Guide: ntfy (notifications only)</summary>
+      <div class="mt-12 text-sm" style="line-height:1.8">
+        <p><strong>Step 1:</strong> Install the <a href="https://ntfy.sh" target="_blank">ntfy</a> app on your phone.</p>
+        <p><strong>Step 2:</strong> Subscribe to a topic (e.g. <code>my-nanobot-alerts</code>).</p>
+        <p><strong>Step 3:</strong> Add to your <code>.env</code>:</p>
+        <pre class="pre-wrap mt-4 mb-8">NOTIFICATION_WEBHOOK_URL=https://ntfy.sh/my-nanobot-alerts</pre>
+        <p><strong>Step 4:</strong> Restart: <code>docker compose restart bridge</code></p>
+        <p class="text-muted mt-8">ntfy is one-way (notifications only). Use it for morning briefings and alerts.</p>
+      </div>
+    </details>
   </div>
   <div class="card mb-16">
     <div class="flex-between mb-8">
@@ -1827,6 +1925,7 @@ function adminApp(){return{
 
   // --- Channels ---
   channelStatus:{},pendingPairings:[],approvedUsers:[],dmPolicy:'pairing',channelTestResult:{},
+  whatsappQR:{show:false,qr:'',status:'',number:'',error:''},
 
   // --- Shell ---
   pendingActions:[],actionHistory:[],elevatedCommands:{},proposeCmd:'',proposeDesc:'',proposeResult:'',
@@ -2094,6 +2193,23 @@ function adminApp(){return{
     this.channelTestResult[channel]='Sending...';
     try{const r=await this.api('/channels/test',{method:'POST',body:{channel,message:'Test message from nanobot admin UI'}});
       this.channelTestResult[channel]=r.ok?'Sent!':'Failed: '+(r.error||'unknown')}catch(e){this.channelTestResult[channel]='Error: '+e.message}},
+  async showWhatsAppQR(){
+    this.whatsappQR={show:true,qr:'',status:'',number:'',error:''};
+    const poll=async()=>{
+      try{
+        const st=await this.api('/webhooks/whatsapp/status');
+        this.whatsappQR.status=st.session_status||'';this.whatsappQR.number=st.my_number||'';
+        if(st.session_status==='WORKING'){this.whatsappQR.qr='';return}
+        const qr=await this.api('/webhooks/whatsapp/qr');
+        if(qr.ok&&qr.qr_value){
+          this.whatsappQR.qr=qr.qr_value;this.whatsappQR.error='';
+          this.$nextTick(()=>{if(typeof QRCode!=='undefined'){
+            const c=document.getElementById('qrCanvas');if(c){c.getContext('2d').clearRect(0,0,256,256);
+              QRCode.toCanvas(c,qr.qr_value,{width:256,margin:2,color:{dark:'#000',light:'#fff'}})}}})
+        }else{this.whatsappQR.error=qr.error||qr.detail||'Waiting for QR...'}
+      }catch(e){this.whatsappQR.error='Cannot reach WhatsApp bridge: '+e.message}
+      if(this.whatsappQR.show&&this.whatsappQR.status!=='WORKING')setTimeout(poll,3000)};
+    poll()},
   async revokeUser(pid){if(!confirm('Revoke access for '+pid+'?'))return;
     try{await this.api('/channels/pair/revoke',{method:'POST',body:{platform_id:pid}});await this.loadChannels()}catch(e){alert('Error: '+e.message)}},
 
@@ -2854,6 +2970,7 @@ if ('serviceWorker' in navigator) {
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3/dist/cdn.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 {pwa_head}
 <style>{ADMIN_CSS}{MOBILE_CSS}</style>
 </head>
