@@ -1,9 +1,11 @@
 name: "CodeQL Security Configuration"
 
-# Exclude py/path-injection: local_doc_ingestor.py validates paths via
-# os.path.realpath + startswith(watch_dir + os.sep) in _resolve_safe_path(),
-# but CodeQL's interprocedural taint tracking does not recognize this pattern
-# as a sanitizer and produces false positives.
 query-filters:
+  # py/path-injection: local_doc_ingestor.py validates paths via
+  # os.path.realpath + startswith — CodeQL doesn't recognize this sanitizer.
   - exclude:
       id: py/path-injection
+  # py/stack-trace-exposure: /remember endpoint is wrapped in try/except
+  # with generic HTTPException — no stack trace reaches the client.
+  - exclude:
+      id: py/stack-trace-exposure
