@@ -30,7 +30,9 @@ from typing import Any
 
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware as _BHTTP
 from litellm import completion as litellm_completion
 from litellm import embedding as litellm_embedding
 from pydantic import BaseModel, Field
@@ -186,7 +188,6 @@ if ENCRYPTION_ENABLED or ENCRYPTION_SQLITE_ENABLED or ENCRYPTION_QDRANT_ENABLED_
 app = FastAPI(title="nanobot-rag-bridge-v9", docs_url="/docs", redoc_url="/redoc")
 
 # CORS — deny by default, allow same-origin only
-from fastapi.middleware.cors import CORSMiddleware
 _cors_origins = [o.strip() for o in os.getenv("CORS_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -197,12 +198,9 @@ app.add_middleware(
 )
 
 # Request-ID middleware for log correlation
-import uuid as _uuid
-from starlette.middleware.base import BaseHTTPMiddleware as _BHTTP
-
 class _RequestIDMiddleware(_BHTTP):
     async def dispatch(self, request, call_next):
-        rid = request.headers.get("X-Request-ID", _uuid.uuid4().hex[:12])
+        rid = request.headers.get("X-Request-ID", uuid.uuid4().hex[:12])
         request.state.request_id = rid
         response = await call_next(request)
         response.headers["X-Request-ID"] = rid
@@ -609,7 +607,7 @@ try:
         """Adapter for extensions to call remember logic."""
         body = RememberIn(text=text, collection=collection, subject=subject,
                           tags=tags or [], source=source, summarize=summarize)
-        return remember(body)
+        return _remember_internal(body)
 
     def _ext_embed(texts: list[str]) -> tuple[list[list[float]], Any]:
         """Adapter for extensions to call embedding (for dedup)."""
@@ -1126,10 +1124,8 @@ def search(body: SearchIn):
                     pass
     return {"query": body.query, "results": reranked, "embedding_attempts": embedding_attempts, "collections": collections}
 
-@app.post("/remember", dependencies=[Depends(verify_token)])
-def remember(body: RememberIn, request: Request):
-    from rate_limiter import extract_user_id
-    rate_limiters.check_per_user("remember", extract_user_id(request))
+def _remember_internal(body: RememberIn) -> dict[str, Any]:
+    """Core remember logic — used by endpoint and internal callers."""
     final_text = normalize_whitespace(body.text)
 
     # PII filtering before storage
@@ -1188,6 +1184,12 @@ def remember(body: RememberIn, request: Request):
             payload["text"] = _qdrant_enc_instance.encrypt_field(payload["text"])
     qdrant.upsert(collection_name=body.collection, points=[models.PointStruct(id=point_id, vector=point_vectors, payload=payload)])
     return {"ok": True, "id": point_id, "payload": payload, "embedding_attempts": embedding_attempts, "summary_attempts": summary_attempts}
+
+@app.post("/remember", dependencies=[Depends(verify_token)])
+def remember(body: RememberIn, request: Request):
+    from rate_limiter import extract_user_id
+    rate_limiters.check_per_user("remember", extract_user_id(request))
+    return _remember_internal(body)
 
 @app.post("/ask", dependencies=[Depends(verify_token)])
 def ask(body: AskIn):
