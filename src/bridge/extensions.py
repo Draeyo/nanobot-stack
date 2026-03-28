@@ -953,7 +953,7 @@ async def channel_test_endpoint(request: Request):
         return {"ok": result.get(channel, False), "channel": channel, "result": result}
     except Exception as exc:
         logger.exception("Channel test failed for %s", channel)
-        return {"ok": False, "error": str(exc)}
+        return {"ok": False, "error": type(exc).__name__}
 
 
 # --------------------------------------------------------------------------

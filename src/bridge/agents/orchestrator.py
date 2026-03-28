@@ -58,13 +58,7 @@ class OrchestratorAgent(AgentBase):
     description: str = "Decomposes complex tasks and delegates to specialist sub-agents"
     max_steps: int = 15
 
-    def __init__(
-        self,
-        run_chat_fn: Callable[..., Any],
-        tool_registry: dict[str, Callable[..., Any]] | None = None,
-        trust_engine: Any = None,
-    ) -> None:
-        super().__init__(run_chat_fn, tool_registry, trust_engine)
+    # Uses AgentBase.__init__ directly — no override needed
 
     # ------------------------------------------------------------------
     # Public API
@@ -144,7 +138,7 @@ class OrchestratorAgent(AgentBase):
             pass
 
         # 2. Check built-in agent registry
-        from agents import get_agent_class
+        from agents import get_agent_class  # pylint: disable=cyclic-import
         agent_cls = get_agent_class(agent_name)
         if agent_cls and agent_name != "orchestrator":
             try:
